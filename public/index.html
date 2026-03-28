@@ -277,20 +277,51 @@
       word-break: break-word;
     }
 
-    .download-btn {
-      width: 100%;
+    .result-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .download-btn, .use-source-btn {
       padding: 8px;
-      background: rgba(59, 130, 246, 0.3);
-      border: 1px solid rgba(59, 130, 246, 0.5);
-      color: #60a5fa;
       border-radius: 4px;
       cursor: pointer;
       font-size: 0.85em;
       transition: all 0.2s ease;
+      border: 1px solid;
+      background: rgba(59, 130, 246, 0.3);
+      color: #60a5fa;
+      border-color: rgba(59, 130, 246, 0.5);
     }
 
     .download-btn:hover {
       background: rgba(59, 130, 246, 0.5);
+    }
+
+    .use-source-btn {
+      background: rgba(74, 222, 128, 0.2);
+      color: #86efac;
+      border-color: rgba(74, 222, 128, 0.5);
+    }
+
+    .use-source-btn:hover {
+      background: rgba(74, 222, 128, 0.4);
+    }
+
+    .use-source-btn.active {
+      background: rgba(74, 222, 128, 0.5);
+      border-color: #22c55e;
+    }
+
+    .source-badge {
+      display: inline-block;
+      background: rgba(74, 222, 128, 0.3);
+      color: #86efac;
+      padding: 4px 8px;
+      border-radius: 3px;
+      font-size: 0.75em;
+      margin-left: 8px;
     }
 
     .loading-spinner {
@@ -367,6 +398,8 @@
   <script>
     let selectedEffect = null;
     let uploadedImagePath = null;
+    let currentSourcePath = null;
+    let currentSourceType = null; // 'upload' or 'generated'
 
     // Load effects
     fetch('/api/effects')
@@ -402,22 +435,27 @@
         return;
       }
 
-      const formData = new FormData();
-      formData.append('image', file);
+      // Reset source type
+      currentSourceType = 'upload';
+      currentSourcePath = null;
+      uploadedImagePath = 'uploaded';
+
+      // Clear previous result selection
+      document.querySelectorAll('.use-source-btn.active').forEach(btn => {
+        btn.classList.remove('active');
+      });
 
       // Show preview
       const reader = new FileReader();
       reader.onload = (e) => {
         document.getElementById('previewImg').src = e.target.result;
         document.getElementById('preview').style.display = 'block';
-        uploadedImagePath = 'uploaded';
+        updateSourceBadge();
         updateProcessBtn();
       };
       reader.readAsDataURL(file);
 
-      // Upload for processing
-      fetch('/api/upload', { method: 'POST', body: formData })
-        .catch(() => {}); // We'll handle upload in process request
+      showStatus('✓ Image uploaded', 'success');
     }
 
     function selectEffect(effect) {
@@ -459,7 +497,8 @@
 
     function updateProcessBtn() {
       const btn = document.getElementById('processBtn');
-      btn.disabled = !selectedEffect || !uploadedImagePath;
+      const hasSource = uploadedImagePath || (currentSourceType === 'generated' && currentSourcePath);
+      btn.disabled = !selectedEffect || !hasSource;
     }
 
     document.getElementById('processBtn').onclick = async () => {
@@ -469,9 +508,15 @@
       showStatus('<span class="loading-spinner"></span>Processing...', 'loading');
 
       const formData = new FormData();
-      const imageFile = document.getElementById('imageInput').files[0];
-      if (imageFile) {
-        formData.append('image', imageFile);
+
+      // Use either uploaded file or existing generated image
+      if (currentSourceType === 'generated' && currentSourcePath) {
+        formData.append('existingImage', currentSourcePath);
+      } else {
+        const imageFile = document.getElementById('imageInput').files[0];
+        if (imageFile) {
+          formData.append('image', imageFile);
+        }
       }
 
       formData.append('effect', selectedEffect.id);
@@ -514,14 +559,60 @@
       const results = document.getElementById('results');
       const item = document.createElement('div');
       item.className = 'result-item';
+      const buttonId = `use-source-${Date.now()}`;
       item.innerHTML = `
         <img src="${imagePath}" alt="${title}" class="result-image">
         <div class="result-info">
           <div class="result-title">${title}</div>
-          <a href="${imagePath}" download class="download-btn">Download</a>
+          <div class="result-buttons">
+            <button class="use-source-btn" id="${buttonId}">Use as source</button>
+            <a href="${imagePath}" download class="download-btn">Download</a>
+          </div>
         </div>
       `;
       results.prepend(item);
+
+      // Add click handler for "Use as source" button
+      document.getElementById(buttonId).onclick = () => {
+        useAsSource(imagePath, buttonId);
+      };
+    }
+
+    function useAsSource(imagePath, buttonId) {
+      // Clear previous selection
+      document.querySelectorAll('.use-source-btn.active').forEach(btn => {
+        btn.classList.remove('active');
+      });
+
+      // Mark this button as active
+      document.getElementById(buttonId).classList.add('active');
+
+      // Update preview
+      document.getElementById('previewImg').src = imagePath;
+      document.getElementById('preview').style.display = 'block';
+
+      // Update current source
+      currentSourcePath = imagePath;
+      currentSourceType = 'generated';
+      uploadedImagePath = null; // Clear uploaded file
+      document.getElementById('imageInput').value = '';
+
+      updateSourceBadge();
+      updateProcessBtn();
+
+      showStatus('✓ Using result as source for next effect', 'success');
+    }
+
+    function updateSourceBadge() {
+      const badge = document.querySelector('.source-badge');
+      if (badge) badge.remove();
+
+      if (currentSourceType === 'generated') {
+        const newBadge = document.createElement('span');
+        newBadge.className = 'source-badge';
+        newBadge.textContent = 'From result';
+        document.querySelector('.image-preview').insertAdjacentElement('beforeend', newBadge);
+      }
     }
   </script>
 </body>

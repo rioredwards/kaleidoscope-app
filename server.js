@@ -47,8 +47,22 @@ function runMagick(inputPath, command, outputPath) {
 // Routes
 app.post('/api/process', upload.single('image'), (req, res) => {
   try {
-    const { effect, params } = req.body;
-    const inputPath = req.file.path;
+    const { effect, params, existingImage } = req.body;
+
+    let inputPath;
+    if (existingImage) {
+      // Use a previously generated image
+      inputPath = path.join(outputDir, path.basename(existingImage));
+      if (!fs.existsSync(inputPath)) {
+        return res.status(400).json({ error: 'Source image not found' });
+      }
+    } else if (req.file) {
+      // Use newly uploaded image
+      inputPath = req.file.path;
+    } else {
+      return res.status(400).json({ error: 'No image provided' });
+    }
+
     const outputPath = path.join(outputDir, `output_${Date.now()}.jpg`);
 
     let command = '';
