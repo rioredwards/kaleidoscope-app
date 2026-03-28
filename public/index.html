@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kaleidoscope Generator</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+      color: #fff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      background: linear-gradient(45deg, #fff, #ccc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      color: #999;
+      font-size: 1.1em;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-bottom: 40px;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 24px;
+      backdrop-filter: blur(10px);
+    }
+
+    .panel h2 {
+      font-size: 1.3em;
+      margin-bottom: 20px;
+      color: #fff;
+    }
+
+    .upload-area {
+      border: 2px dashed rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      padding: 30px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .upload-area:hover {
+      border-color: rgba(255, 255, 255, 0.6);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .upload-area.active {
+      border-color: #4ade80;
+      background: rgba(74, 222, 128, 0.1);
+    }
+
+    #imageInput {
+      display: none;
+    }
+
+    .upload-text {
+      font-size: 1em;
+      color: #ccc;
+      margin-bottom: 10px;
+    }
+
+    .upload-hint {
+      font-size: 0.9em;
+      color: #999;
+    }
+
+    .image-preview {
+      margin-top: 20px;
+      border-radius: 8px;
+      overflow: hidden;
+      max-width: 100%;
+    }
+
+    .image-preview img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .effect-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .effect-btn {
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 0.9em;
+      text-align: left;
+    }
+
+    .effect-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    .effect-btn.active {
+      background: linear-gradient(135deg, #4ade80, #22c55e);
+      border-color: #22c55e;
+    }
+
+    .params {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      padding: 15px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .params.visible {
+      display: block;
+    }
+
+    .param-group {
+      margin-bottom: 12px;
+    }
+
+    .param-group:last-child {
+      margin-bottom: 0;
+    }
+
+    label {
+      display: block;
+      font-size: 0.9em;
+      color: #ccc;
+      margin-bottom: 6px;
+    }
+
+    input[type="range"],
+    input[type="number"],
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      color: #fff;
+      font-size: 0.9em;
+    }
+
+    input[type="range"] {
+      padding: 0;
+      height: 6px;
+    }
+
+    .process-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      border: none;
+      color: #fff;
+      border-radius: 6px;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-bottom: 20px;
+    }
+
+    .process-btn:hover {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      transform: translateY(-2px);
+    }
+
+    .process-btn:disabled {
+      background: rgba(255, 255, 255, 0.1);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status {
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      display: none;
+      font-size: 0.9em;
+    }
+
+    .status.visible {
+      display: block;
+    }
+
+    .status.loading {
+      background: rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.5);
+    }
+
+    .status.success {
+      background: rgba(74, 222, 128, 0.2);
+      color: #86efac;
+      border: 1px solid rgba(74, 222, 128, 0.5);
+    }
+
+    .status.error {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.5);
+    }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 20px;
+    }
+
+    .result-item {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .result-item:hover {
+      border-color: rgba(255, 255, 255, 0.3);
+      transform: translateY(-4px);
+    }
+
+    .result-image {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      background: #000;
+      display: block;
+    }
+
+    .result-info {
+      padding: 12px;
+    }
+
+    .result-title {
+      font-size: 0.9em;
+      color: #ccc;
+      margin-bottom: 8px;
+      word-break: break-word;
+    }
+
+    .download-btn {
+      width: 100%;
+      padding: 8px;
+      background: rgba(59, 130, 246, 0.3);
+      border: 1px solid rgba(59, 130, 246, 0.5);
+      color: #60a5fa;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85em;
+      transition: all 0.2s ease;
+    }
+
+    .download-btn:hover {
+      background: rgba(59, 130, 246, 0.5);
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top: 3px solid #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 768px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 1.8em;
+      }
+
+      .effect-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>✨ Kaleidoscope Generator</h1>
+      <p class="subtitle">Create mesmerizing kaleidoscope effects from your images</p>
+    </header>
+
+    <div class="main-grid">
+      <!-- Upload Panel -->
+      <div class="panel">
+        <h2>1. Upload Image</h2>
+        <div class="upload-area" id="uploadArea">
+          <div class="upload-text">Click or drag image here</div>
+          <div class="upload-hint">Supports JPG, PNG</div>
+          <input type="file" id="imageInput" accept="image/*">
+        </div>
+        <div class="image-preview" id="preview" style="display: none;">
+          <img id="previewImg" src="" alt="Preview">
+        </div>
+      </div>
+
+      <!-- Effects Panel -->
+      <div class="panel">
+        <h2>2. Select Effect</h2>
+        <div class="effect-grid" id="effectGrid"></div>
+
+        <div class="params" id="paramsContainer"></div>
+
+        <div class="status" id="status"></div>
+
+        <button class="process-btn" id="processBtn" disabled>Generate Kaleidoscope</button>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="panel">
+      <h2>Results</h2>
+      <div class="results-grid" id="results"></div>
+    </div>
+  </div>
+
+  <script>
+    let selectedEffect = null;
+    let uploadedImagePath = null;
+
+    // Load effects
+    fetch('/api/effects')
+      .then(r => r.json())
+      .then(data => {
+        const grid = document.getElementById('effectGrid');
+        data.effects.forEach(effect => {
+          const btn = document.createElement('button');
+          btn.className = 'effect-btn';
+          btn.textContent = effect.name;
+          btn.onclick = () => selectEffect(effect);
+          grid.appendChild(btn);
+        });
+      });
+
+    // Upload handling
+    const uploadArea = document.getElementById('uploadArea');
+    const imageInput = document.getElementById('imageInput');
+
+    uploadArea.onclick = () => imageInput.click();
+    uploadArea.ondrop = (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('active');
+      handleImageUpload(e.dataTransfer.files[0]);
+    };
+    uploadArea.ondragover = () => uploadArea.classList.add('active');
+    uploadArea.ondragleave = () => uploadArea.classList.remove('active');
+    imageInput.onchange = (e) => handleImageUpload(e.target.files[0]);
+
+    function handleImageUpload(file) {
+      if (!file.type.startsWith('image/')) {
+        showStatus('Please select an image file', 'error');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('image', file);
+
+      // Show preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        document.getElementById('previewImg').src = e.target.result;
+        document.getElementById('preview').style.display = 'block';
+        uploadedImagePath = 'uploaded';
+        updateProcessBtn();
+      };
+      reader.readAsDataURL(file);
+
+      // Upload for processing
+      fetch('/api/upload', { method: 'POST', body: formData })
+        .catch(() => {}); // We'll handle upload in process request
+    }
+
+    function selectEffect(effect) {
+      selectedEffect = effect;
+
+      // Update button states
+      document.querySelectorAll('.effect-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      event.target.classList.add('active');
+
+      // Update params
+      const paramsContainer = document.getElementById('paramsContainer');
+      paramsContainer.innerHTML = '';
+      paramsContainer.classList.remove('visible');
+
+      if (Object.keys(effect.params).length > 0) {
+        paramsContainer.classList.add('visible');
+        Object.entries(effect.params).forEach(([key, defaultVal]) => {
+          const group = document.createElement('div');
+          group.className = 'param-group';
+
+          const label = document.createElement('label');
+          label.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.value = defaultVal;
+          input.dataset.param = key;
+
+          group.appendChild(label);
+          group.appendChild(input);
+          paramsContainer.appendChild(group);
+        });
+      }
+
+      updateProcessBtn();
+    }
+
+    function updateProcessBtn() {
+      const btn = document.getElementById('processBtn');
+      btn.disabled = !selectedEffect || !uploadedImagePath;
+    }
+
+    document.getElementById('processBtn').onclick = async () => {
+      const btn = document.getElementById('processBtn');
+      btn.disabled = true;
+
+      showStatus('<span class="loading-spinner"></span>Processing...', 'loading');
+
+      const formData = new FormData();
+      const imageFile = document.getElementById('imageInput').files[0];
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
+
+      formData.append('effect', selectedEffect.id);
+
+      const params = {};
+      document.querySelectorAll('[data-param]').forEach(input => {
+        params[input.dataset.param] = input.value;
+      });
+      formData.append('params', JSON.stringify(params));
+
+      try {
+        const response = await fetch('/api/process', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) throw new Error('Processing failed');
+        const result = await response.json();
+
+        if (result.success) {
+          addResult(selectedEffect.name, result.outputPath);
+          showStatus(`✓ ${result.message}`, 'success');
+        } else {
+          showStatus(result.error, 'error');
+        }
+      } catch (error) {
+        showStatus(error.message, 'error');
+      }
+
+      btn.disabled = false;
+    };
+
+    function showStatus(message, type) {
+      const status = document.getElementById('status');
+      status.innerHTML = message;
+      status.className = `status visible ${type}`;
+    }
+
+    function addResult(title, imagePath) {
+      const results = document.getElementById('results');
+      const item = document.createElement('div');
+      item.className = 'result-item';
+      item.innerHTML = `
+        <img src="${imagePath}" alt="${title}" class="result-image">
+        <div class="result-info">
+          <div class="result-title">${title}</div>
+          <a href="${imagePath}" download class="download-btn">Download</a>
+        </div>
+      `;
+      results.prepend(item);
+    }
+  </script>
+</body>
+</html>
