@@ -168,6 +168,55 @@
       white-space: nowrap;
     }
 
+    .toolbar-opt {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.72em;
+      color: #bbb;
+      white-space: nowrap;
+      flex-shrink: 0;
+      cursor: pointer;
+      user-select: none;
+    }
+    .toolbar-opt input {
+      accent-color: #4ade80;
+      cursor: pointer;
+    }
+    .toolbar-select {
+      padding: 4px 6px;
+      font-size: 0.72em;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      color: #fff;
+      max-width: 140px;
+      cursor: pointer;
+    }
+
+    /* Second row: P5 client options (kept out of the crowded effect strip) */
+    .toolbar-sub {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      padding: 8px 12px;
+      background: #252525;
+      border-bottom: 1px solid rgba(255, 68, 68, 0.25);
+      font-size: 0.82em;
+    }
+    .toolbar-sub-label {
+      color: #86efac;
+      font-weight: 600;
+      font-size: 0.85em;
+      letter-spacing: 0.02em;
+    }
+    .toolbar-sub .toolbar-opt {
+      font-size: 0.95em;
+      color: #e8e8e8;
+    }
+
     .status {
       display: none;
       font-size: 0.75em;
@@ -563,6 +612,20 @@
       </div>
     </div>
 
+    <div class="toolbar-sub" id="clientPreviewBar">
+      <span class="toolbar-sub-label">P5 preview</span>
+      <label class="toolbar-opt" title="Nearest-neighbor: crisp pixels when scaling, remapping, and cropping (no soft anti-aliasing blur)">
+        <input type="checkbox" id="sharpPixels">
+        Sharp pixels
+      </label>
+      <select class="toolbar-select" id="maxPreviewPx" title="Max width/height for client preview (larger keeps more detail; slower)">
+        <option value="600">Preview 600px</option>
+        <option value="1600">Preview 1600px</option>
+        <option value="0">Full (cap 8k)</option>
+      </select>
+      <span style="color:rgba(255,255,255,0.35);font-size:0.8em;">Processing runs in your browser; use Save/Download for a file.</span>
+    </div>
+
     <!-- MAIN AREA -->
     <div class="main-area">
       <div class="history-strip source-strip" id="sourceHistoryStrip">
@@ -912,9 +975,13 @@
     function processImage() {
       if (!window.resultP5 || !selectedEffect) return;
       const params = collectParamValues();
-      window.resultP5.applyEffect(selectedEffect.id, params);
-      document.getElementById('resultPlaceholder').style.display = 'none';
-      document.getElementById('resultActions').style.display = 'flex';
+      showStatus('<span class="loading-spinner"></span>Processing…', 'loading');
+      setTimeout(() => {
+        window.resultP5.applyEffect(selectedEffect.id, params);
+        document.getElementById('resultPlaceholder').style.display = 'none';
+        document.getElementById('resultActions').style.display = 'flex';
+        showStatus('', 'clear');
+      }, 0);
     }
 
     async function saveResult() {
@@ -971,6 +1038,11 @@
     // ── STATUS ──
     function showStatus(message, type) {
       const status = document.getElementById('status');
+      if (type === 'clear' || (!message && type !== 'loading' && type !== 'success' && type !== 'error')) {
+        status.innerHTML = '';
+        status.className = 'status';
+        return;
+      }
       status.innerHTML = message;
       status.className = `status ${type}`;
     }
@@ -1065,6 +1137,60 @@
     }
 
     document.getElementById('savePresetBtn').onclick = saveCurrentAsPreset;
+
+    const LS_SHARP = 'kaleidoscope.sharpPixels';
+    const LS_MAX = 'kaleidoscope.maxPreviewPx';
+
+    function applyClientPixelOptions() {
+      if (!window.resultP5) return Promise.resolve();
+      const sharpEl = document.getElementById('sharpPixels');
+      const maxEl = document.getElementById('maxPreviewPx');
+      if (!sharpEl || !maxEl) return Promise.resolve();
+      return window.resultP5.setOptions({
+        sharpPixels: sharpEl.checked,
+        maxPreviewPx: parseInt(maxEl.value, 10),
+      });
+    }
+
+    function initClientPixelControls() {
+      const sharpEl = document.getElementById('sharpPixels');
+      const maxEl = document.getElementById('maxPreviewPx');
+      const savedSharp = localStorage.getItem(LS_SHARP);
+      if (savedSharp !== null) sharpEl.checked = savedSharp === '1';
+      const savedMax = localStorage.getItem(LS_MAX);
+      if (savedMax !== null && ['600', '1600', '0'].includes(savedMax)) maxEl.value = savedMax;
+      sharpEl.addEventListener('change', async () => {
+        localStorage.setItem(LS_SHARP, sharpEl.checked ? '1' : '0');
+        try {
+          await applyClientPixelOptions();
+        } catch (_) { /* reload failed */ }
+        const hasSource = uploadedImagePath || (currentSourceType === 'generated' && currentSourcePath);
+        if (hasSource && selectedEffect) processImage();
+      });
+      maxEl.addEventListener('change', async () => {
+        localStorage.setItem(LS_MAX, maxEl.value);
+        try {
+          await applyClientPixelOptions();
+        } catch (_) { /* reload failed */ }
+        const hasSource = uploadedImagePath || (currentSourceType === 'generated' && currentSourcePath);
+        if (hasSource && selectedEffect) processImage();
+      });
+      void applyClientPixelOptions();
+    }
+
+    initClientPixelControls();
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.closest('input, textarea, select')) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        saveResult();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        downloadResult();
+      }
+    });
 
     // ── CROP ──
     let cropActive = false;
@@ -1226,7 +1352,10 @@
 
       const c = document.createElement('canvas');
       c.width = sw; c.height = sh;
-      c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+      const ctx = c.getContext('2d');
+      const sharp = document.getElementById('sharpPixels')?.checked;
+      ctx.imageSmoothingEnabled = !sharp;
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
       const dataURI = c.toDataURL('image/png');
 
       exitCropMode();

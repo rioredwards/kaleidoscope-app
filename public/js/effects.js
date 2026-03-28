@@ -1,5 +1,12 @@
 /* effects.js — Pure client-side image effect functions for p5.js */
 
+/** 'bilinear' (soft) or 'nearest' (crisp pixels, no interpolation blur) */
+let pixelSamplingMode = 'bilinear';
+
+function setPixelSamplingMode(mode) {
+  pixelSamplingMode = mode === 'nearest' ? 'nearest' : 'bilinear';
+}
+
 function bilinearSample(pixels, w, h, x, y) {
   const x0 = Math.max(0, Math.min(Math.floor(x), w - 1));
   const y0 = Math.max(0, Math.min(Math.floor(y), h - 1));
@@ -22,6 +29,19 @@ function bilinearSample(pixels, w, h, x, y) {
       fx * fy * pixels[i11 + c];
   }
   return out;
+}
+
+function nearestSample(pixels, w, h, x, y) {
+  const xi = Math.max(0, Math.min(Math.round(x), w - 1));
+  const yi = Math.max(0, Math.min(Math.round(y), h - 1));
+  const i = (yi * w + xi) * 4;
+  return [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]];
+}
+
+function sampleRgba(pixels, w, h, x, y) {
+  return pixelSamplingMode === 'nearest'
+    ? nearestSample(pixels, w, h, x, y)
+    : bilinearSample(pixels, w, h, x, y);
 }
 
 // ── Kaleidoscope ──────────────────────────────────────────────────────────────
@@ -68,7 +88,7 @@ function applyKaleidoscope(p, img, params) {
       const sx = cx + r * Math.cos(srcAngle);
       const sy = cy + r * Math.sin(srcAngle);
 
-      const [rv, gv, bv, av] = bilinearSample(img.pixels, w, h, sx, sy);
+      const [rv, gv, bv, av] = sampleRgba(img.pixels, w, h, sx, sy);
       out.pixels[idx] = rv;
       out.pixels[idx + 1] = gv;
       out.pixels[idx + 2] = bv;
@@ -109,7 +129,7 @@ function applyMandala(p, img) {
         const sx = cropX + half + rx;
         const sy = cropY + half + ry;
 
-        const [r, g, b] = bilinearSample(img.pixels, w, h, sx, sy);
+        const [r, g, b] = sampleRgba(img.pixels, w, h, sx, sy);
         const rn = r / 255, gn = g / 255, bn = b / 255;
 
         if (i === 0) {
@@ -200,7 +220,7 @@ function applyHighContrast(p, img, params) {
 }
 
 // ── Barrel Distortion ─────────────────────────────────────────────────────────
-// Radial distortion: r_new = r * (1 - strength * r^2), bilinear sampled.
+// Radial distortion: r_new = r * (1 - strength * r^2); remap via sampleRgba (smooth or nearest).
 
 function applyBarrel(p, img, params) {
   const strength = parseFloat(params.strength) || 0.3;
@@ -228,7 +248,7 @@ function applyBarrel(p, img, params) {
       const sx = cx + (rNew / r) * (ox - cx);
       const sy = cy + (rNew / r) * (oy - cy);
 
-      const [rv, gv, bv, av] = bilinearSample(img.pixels, w, h, sx, sy);
+      const [rv, gv, bv, av] = sampleRgba(img.pixels, w, h, sx, sy);
       out.pixels[idx] = rv;
       out.pixels[idx + 1] = gv;
       out.pixels[idx + 2] = bv;
@@ -291,3 +311,5 @@ const EFFECTS = {
   barrel: applyBarrel,
   sharpen: applySharpen,
 };
+
+window.setPixelSamplingMode = setPixelSamplingMode;
