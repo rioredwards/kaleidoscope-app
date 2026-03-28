@@ -1,5 +1,6 @@
 node_modules/
 uploads/
 outputs/
+presets.json
 .DS_Store
 *.log

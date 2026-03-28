@@ -176,6 +176,59 @@ app.get('/api/effects', (req, res) => {
   });
 });
 
+// Preset management
+const presetsFile = path.join(__dirname, 'presets.json');
+function readPresets() {
+  try {
+    return JSON.parse(fs.readFileSync(presetsFile, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+function writePresets(presets) {
+  fs.writeFileSync(presetsFile, JSON.stringify(presets, null, 2));
+}
+
+app.get('/api/presets', (req, res) => {
+  res.json({ presets: readPresets() });
+});
+
+app.post('/api/presets', (req, res) => {
+  const { name, effectId, params } = req.body;
+  if (!name || !effectId) {
+    return res.status(400).json({ error: 'name and effectId required' });
+  }
+  const presets = readPresets();
+  const idx = presets.findIndex(p => p.name === name);
+  const preset = { name, effectId, params: params || {} };
+  if (idx >= 0) {
+    presets[idx] = preset;
+  } else {
+    presets.push(preset);
+  }
+  writePresets(presets);
+  res.json({ success: true, preset });
+});
+
+app.delete('/api/presets/:name', (req, res) => {
+  const presets = readPresets();
+  const filtered = presets.filter(p => p.name !== req.params.name);
+  if (filtered.length === presets.length) {
+    return res.status(404).json({ error: 'Preset not found' });
+  }
+  writePresets(filtered);
+  res.json({ success: true });
+});
+
+app.get('/api/outputs', (req, res) => {
+  const files = fs.readdirSync(outputDir)
+    .filter(f => /\.(jpg|png)$/i.test(f))
+    .sort()
+    .reverse()
+    .map(f => `/outputs/${f}`);
+  res.json({ outputs: files });
+});
+
 // Serve uploaded/output files
 app.use('/uploads', express.static(uploadDir));
 app.use('/outputs', express.static(outputDir));
