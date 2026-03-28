@@ -45,9 +45,24 @@ function runMagick(inputPath, command, outputPath) {
 }
 
 // Routes
+function parseEffectParams(raw) {
+  if (raw == null) return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 app.post('/api/process', upload.single('image'), (req, res) => {
   try {
-    const { effect, params, existingImage } = req.body;
+    const { effect, existingImage } = req.body;
+    const params = parseEffectParams(req.body.params);
 
     let inputPath;
     if (existingImage) {

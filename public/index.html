@@ -735,8 +735,11 @@
             input.value = parseFloat(currentVal);
             input.dataset.param = key;
             input.dataset.suffix = suffix;
-            input.oninput = () => { valueSpan.textContent = input.value + suffix; };
-            input.onchange = reprocess;
+            input.oninput = () => {
+              valueSpan.textContent = input.value + suffix;
+              clearTimeout(input._paramDebounce);
+              input._paramDebounce = setTimeout(reprocess, 120);
+            };
 
             group.appendChild(label);
             group.appendChild(input);
@@ -809,6 +812,15 @@
       document.getElementById('savePresetBtn').disabled = !selectedEffect;
     }
 
+    function collectParamValues() {
+      const params = {};
+      document.querySelectorAll('#paramPopover [data-param]').forEach((el) => {
+        const suffix = el.dataset.suffix || '';
+        params[el.dataset.param] = el.value + suffix;
+      });
+      return params;
+    }
+
     // ── PROCESS ──
     function dataURItoBlob(dataURI) {
       const [header, data] = dataURI.split(',');
@@ -836,13 +848,7 @@
       }
 
       formData.append('effect', selectedEffect.id);
-
-      const params = {};
-      document.querySelectorAll('[data-param]').forEach(input => {
-        const suffix = input.dataset.suffix || '';
-        params[input.dataset.param] = input.value + suffix;
-      });
-      formData.append('params', JSON.stringify(params));
+      formData.append('params', JSON.stringify(collectParamValues()));
 
       try {
         const response = await fetch('/api/process', {
@@ -942,10 +948,7 @@
       const name = prompt('Preset name:');
       if (!name) return;
 
-      const params = {};
-      document.querySelectorAll('[data-param]').forEach(input => {
-        params[input.dataset.param] = input.value;
-      });
+      const params = collectParamValues();
 
       try {
         const response = await fetch('/api/presets', {
