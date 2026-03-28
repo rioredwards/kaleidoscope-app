@@ -451,6 +451,90 @@
       font-size: 1.2em;
       color: #4ade80;
     }
+
+    /* ── RESULT CANVAS ── */
+    #resultCanvas {
+      position: absolute;
+      inset: 0;
+    }
+    #resultCanvas canvas {
+      display: block;
+    }
+
+    .result-actions {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      display: flex;
+      gap: 6px;
+      z-index: 1;
+    }
+    .result-action-btn {
+      background: rgba(59, 130, 246, 0.3);
+      border: 1px solid rgba(59, 130, 246, 0.5);
+      color: #60a5fa;
+      border-radius: 4px;
+      padding: 5px 10px;
+      font-size: 0.78em;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .result-action-btn:hover {
+      background: rgba(59, 130, 246, 0.5);
+    }
+    .result-action-btn.save-btn {
+      background: rgba(74, 222, 128, 0.3);
+      border-color: rgba(74, 222, 128, 0.5);
+      color: #86efac;
+    }
+    .result-action-btn.save-btn:hover {
+      background: rgba(74, 222, 128, 0.5);
+    }
+
+    /* ── CROP ── */
+    .toolbar-btn.crop-active {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      border-color: #d97706;
+      color: #000;
+      font-weight: 600;
+    }
+
+    .crop-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      cursor: crosshair;
+    }
+
+    .crop-selection {
+      position: absolute;
+      border: 2px dashed #4ade80;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+      cursor: move;
+    }
+
+    .crop-handle {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background: #4ade80;
+      border: 1px solid rgba(0, 0, 0, 0.4);
+      border-radius: 2px;
+    }
+    .crop-handle-nw { top: -6px; left: -6px; cursor: nw-resize; }
+    .crop-handle-ne { top: -6px; right: -6px; cursor: ne-resize; }
+    .crop-handle-sw { bottom: -6px; left: -6px; cursor: sw-resize; }
+    .crop-handle-se { bottom: -6px; right: -6px; cursor: se-resize; }
+
+    .crop-actions-bar {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      z-index: 12;
+    }
   </style>
 </head>
 <body>
@@ -460,6 +544,7 @@
     <div class="toolbar">
       <button class="toolbar-btn upload-btn" id="uploadBtn">Upload</button>
       <input type="file" id="imageInput" accept="image/*" style="display:none">
+      <button class="toolbar-btn" id="cropBtn" onclick="toggleCropMode()">Crop</button>
 
       <div class="toolbar-divider"></div>
 
@@ -491,7 +576,12 @@
 
       <div class="image-panel" id="resultPanel">
         <span class="panel-label">Result</span>
-        <div class="no-image-msg">Select an effect</div>
+        <div class="no-image-msg" id="resultPlaceholder">Select an effect</div>
+        <div id="resultCanvas"></div>
+        <div class="result-actions" id="resultActions" style="display:none">
+          <button class="result-action-btn save-btn" onclick="saveResult()">Save</button>
+          <button class="result-action-btn" onclick="downloadResult()">Download</button>
+        </div>
       </div>
 
       <div class="history-strip result-strip" id="resultHistoryStrip">
@@ -508,6 +598,10 @@
     </div>
 
   </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <script src="/js/effects.js"></script>
+  <script src="/js/p5-canvas.js"></script>
 
   <script>
     // ── STATE ──
@@ -584,6 +678,7 @@
         currentSourceDataURI = dataURI;
         updateSourcePreview(dataURI, 'upload');
         addToSourceHistory(dataURI, 'upload');
+        if (window.resultP5) window.resultP5.loadSourceImage(dataURI);
       };
       reader.readAsDataURL(file);
 
@@ -643,6 +738,7 @@
       }
       renderSourceHistory();
       updateSavePresetBtn();
+      if (window.resultP5) window.resultP5.loadSourceImage(entry.src);
     }
 
     // ── RESULT HISTORY ──
@@ -657,16 +753,6 @@
         thumb.onclick = () => useAsSource(entry.imagePath);
         strip.appendChild(thumb);
       });
-    }
-
-    function showResultImage(imagePath, title) {
-      currentResultPath = imagePath;
-      const panel = document.getElementById('resultPanel');
-      panel.innerHTML = `
-        <span class="panel-label">Result</span>
-        <img src="${imagePath}" alt="${title}">
-        <a class="result-download-btn" href="${imagePath}" download title="Download result">Download</a>
-      `;
     }
 
     // ── EFFECTS ──
@@ -738,7 +824,7 @@
             input.oninput = () => {
               valueSpan.textContent = input.value + suffix;
               clearTimeout(input._paramDebounce);
-              input._paramDebounce = setTimeout(reprocess, 120);
+              input._paramDebounce = setTimeout(reprocess, 200);
             };
 
             group.appendChild(label);
@@ -804,6 +890,7 @@
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        if (cropActive) { cancelCrop(); return; }
         document.getElementById('paramPopover').classList.remove('visible');
       }
     });
@@ -821,58 +908,49 @@
       return params;
     }
 
-    // ── PROCESS ──
-    function dataURItoBlob(dataURI) {
-      const [header, data] = dataURI.split(',');
-      const mime = header.match(/:(.*?);/)[1];
-      const bytes = atob(data);
-      const arr = new Uint8Array(bytes.length);
-      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-      return new Blob([arr], { type: mime });
+    // ── PROCESS (client-side via p5.js) ──
+    function processImage() {
+      if (!window.resultP5 || !selectedEffect) return;
+      const params = collectParamValues();
+      window.resultP5.applyEffect(selectedEffect.id, params);
+      document.getElementById('resultPlaceholder').style.display = 'none';
+      document.getElementById('resultActions').style.display = 'flex';
     }
 
-    async function processImage() {
-      showStatus('<span class="loading-spinner"></span>Processing...', 'loading');
-
-      const formData = new FormData();
-
-      if (currentSourceType === 'generated' && currentSourcePath) {
-        formData.append('existingImage', currentSourcePath);
-      } else if (currentSourceDataURI) {
-        formData.append('image', dataURItoBlob(currentSourceDataURI), 'source.png');
-      } else {
-        const imageFile = document.getElementById('imageInput').files[0];
-        if (imageFile) {
-          formData.append('image', imageFile);
-        }
-      }
-
-      formData.append('effect', selectedEffect.id);
-      formData.append('params', JSON.stringify(collectParamValues()));
-
+    async function saveResult() {
+      if (!window.resultP5 || !window.resultP5.hasResult()) return;
+      showStatus('<span class="loading-spinner"></span>Saving...', 'loading');
       try {
-        const response = await fetch('/api/process', {
+        const dataURL = window.resultP5.getResultAsDataURL();
+        const res = await fetch('/api/save-canvas', {
           method: 'POST',
-          body: formData
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageData: dataURL })
         });
-
-        if (!response.ok) throw new Error('Processing failed');
-        const result = await response.json();
-
-        if (result.success) {
-          addResult(selectedEffect.name, result.outputPath);
-          showStatus('Done', 'success');
-        } else {
-          showStatus(result.error, 'error');
-        }
-      } catch (error) {
-        showStatus(error.message, 'error');
+        if (!res.ok) throw new Error('Save failed');
+        const data = await res.json();
+        const title = selectedEffect ? selectedEffect.name : 'Result';
+        addResult(title, data.outputPath);
+        showStatus('Saved', 'success');
+      } catch (err) {
+        showStatus(err.message, 'error');
       }
+    }
+
+    function downloadResult() {
+      if (!window.resultP5 || !window.resultP5.hasResult()) return;
+      const dataURL = window.resultP5.getResultAsDataURL();
+      const a = document.createElement('a');
+      a.href = dataURL;
+      a.download = `kaleidoscope_${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
 
     function addResult(title, imagePath) {
+      currentResultPath = imagePath;
       resultHistory.unshift({ title, imagePath });
-      showResultImage(imagePath, title);
       renderResultHistory();
     }
 
@@ -886,6 +964,7 @@
       addToSourceHistory(imagePath, 'generated');
       renderResultHistory();
       updateSavePresetBtn();
+      if (window.resultP5) window.resultP5.loadSourceImage(imagePath);
       showStatus('Using result as source', 'success');
     }
 
@@ -986,6 +1065,184 @@
     }
 
     document.getElementById('savePresetBtn').onclick = saveCurrentAsPreset;
+
+    // ── CROP ──
+    let cropActive = false;
+    let cropSel = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
+    let cropDrag = null;
+    let cropEls = null;
+
+    function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+    function clamp01(v) { return clamp(v, 0, 1); }
+
+    function toggleCropMode() {
+      if (cropActive) { cancelCrop(); return; }
+      if (!document.querySelector('#sourcePanel img')) {
+        showStatus('Upload an image first', 'error');
+        return;
+      }
+      enterCropMode();
+    }
+
+    function enterCropMode() {
+      cropActive = true;
+      document.getElementById('cropBtn').classList.add('crop-active');
+      cropSel = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
+
+      const panel = document.getElementById('sourcePanel');
+
+      const overlay = document.createElement('div');
+      overlay.className = 'crop-overlay';
+
+      const sel = document.createElement('div');
+      sel.className = 'crop-selection';
+      ['nw', 'ne', 'sw', 'se'].forEach(pos => {
+        const h = document.createElement('div');
+        h.className = `crop-handle crop-handle-${pos}`;
+        h.dataset.handle = pos;
+        sel.appendChild(h);
+      });
+      overlay.appendChild(sel);
+
+      const actions = document.createElement('div');
+      actions.className = 'crop-actions-bar';
+      actions.innerHTML =
+        '<button class="result-action-btn save-btn" onclick="applyCrop()">Apply Crop</button>' +
+        '<button class="result-action-btn" onclick="cancelCrop()">Cancel</button>';
+
+      panel.appendChild(overlay);
+      panel.appendChild(actions);
+      cropEls = { overlay, sel, actions };
+      syncCropSelection();
+
+      overlay.addEventListener('mousedown', onCropDown);
+      document.addEventListener('mousemove', onCropMove);
+      document.addEventListener('mouseup', onCropUp);
+    }
+
+    function exitCropMode() {
+      cropActive = false;
+      document.getElementById('cropBtn').classList.remove('crop-active');
+      if (cropEls) {
+        cropEls.overlay.removeEventListener('mousedown', onCropDown);
+        document.removeEventListener('mousemove', onCropMove);
+        document.removeEventListener('mouseup', onCropUp);
+        cropEls.overlay.remove();
+        cropEls.actions.remove();
+        cropEls = null;
+      }
+      cropDrag = null;
+    }
+
+    function getCropMapping() {
+      const panel = document.getElementById('sourcePanel');
+      const img = panel.querySelector('img');
+      if (!img) return null;
+      const pr = panel.getBoundingClientRect();
+      const ir = img.getBoundingClientRect();
+      return { ox: ir.left - pr.left, oy: ir.top - pr.top, sw: ir.width, sh: ir.height, ix: ir.left, iy: ir.top };
+    }
+
+    function syncCropSelection() {
+      const m = getCropMapping();
+      if (!m || !cropEls) return;
+      const s = cropEls.sel;
+      s.style.left = (m.ox + cropSel.x * m.sw) + 'px';
+      s.style.top = (m.oy + cropSel.y * m.sh) + 'px';
+      s.style.width = (cropSel.w * m.sw) + 'px';
+      s.style.height = (cropSel.h * m.sh) + 'px';
+    }
+
+    function onCropDown(e) {
+      e.preventDefault();
+      const m = getCropMapping();
+      if (!m) return;
+
+      const handle = e.target.dataset?.handle;
+      const onSel = !handle && e.target.closest('.crop-selection');
+
+      if (handle) {
+        const s = cropSel;
+        let fixed;
+        if (handle === 'nw') fixed = { x: s.x + s.w, y: s.y + s.h };
+        else if (handle === 'ne') fixed = { x: s.x, y: s.y + s.h };
+        else if (handle === 'sw') fixed = { x: s.x + s.w, y: s.y };
+        else fixed = { x: s.x, y: s.y };
+        cropDrag = { type: 'resize', fixed };
+      } else if (onSel) {
+        cropDrag = { type: 'move', startX: e.clientX, startY: e.clientY, startSel: { ...cropSel } };
+      } else {
+        const fx = clamp01((e.clientX - m.ix) / m.sw);
+        const fy = clamp01((e.clientY - m.iy) / m.sh);
+        cropSel = { x: fx, y: fy, w: 0, h: 0 };
+        cropDrag = { type: 'draw', anchorX: fx, anchorY: fy };
+        syncCropSelection();
+      }
+    }
+
+    function onCropMove(e) {
+      if (!cropDrag) return;
+      const m = getCropMapping();
+      if (!m) return;
+
+      const fx = clamp01((e.clientX - m.ix) / m.sw);
+      const fy = clamp01((e.clientY - m.iy) / m.sh);
+
+      if (cropDrag.type === 'draw') {
+        cropSel = {
+          x: Math.min(cropDrag.anchorX, fx),
+          y: Math.min(cropDrag.anchorY, fy),
+          w: Math.max(Math.abs(fx - cropDrag.anchorX), 0.01),
+          h: Math.max(Math.abs(fy - cropDrag.anchorY), 0.01),
+        };
+      } else if (cropDrag.type === 'move') {
+        const dx = (e.clientX - cropDrag.startX) / m.sw;
+        const dy = (e.clientY - cropDrag.startY) / m.sh;
+        const s = cropDrag.startSel;
+        cropSel.x = clamp(s.x + dx, 0, 1 - s.w);
+        cropSel.y = clamp(s.y + dy, 0, 1 - s.h);
+      } else if (cropDrag.type === 'resize') {
+        const f = cropDrag.fixed;
+        cropSel = {
+          x: Math.min(f.x, fx),
+          y: Math.min(f.y, fy),
+          w: Math.max(Math.abs(fx - f.x), 0.01),
+          h: Math.max(Math.abs(fy - f.y), 0.01),
+        };
+      }
+      syncCropSelection();
+    }
+
+    function onCropUp() { cropDrag = null; }
+
+    function applyCrop() {
+      const img = document.querySelector('#sourcePanel img');
+      if (!img || cropSel.w < 0.02 || cropSel.h < 0.02) { cancelCrop(); return; }
+
+      const sx = Math.round(cropSel.x * img.naturalWidth);
+      const sy = Math.round(cropSel.y * img.naturalHeight);
+      const sw = Math.round(cropSel.w * img.naturalWidth);
+      const sh = Math.round(cropSel.h * img.naturalHeight);
+
+      const c = document.createElement('canvas');
+      c.width = sw; c.height = sh;
+      c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+      const dataURI = c.toDataURL('image/png');
+
+      exitCropMode();
+
+      currentSourceType = 'upload';
+      currentSourcePath = null;
+      uploadedImagePath = 'uploaded';
+      currentSourceDataURI = dataURI;
+      updateSourcePreview(dataURI, 'upload');
+      addToSourceHistory(dataURI, 'upload');
+      if (window.resultP5) window.resultP5.loadSourceImage(dataURI);
+      if (selectedEffect) processImage();
+      showStatus('Image cropped', 'success');
+    }
+
+    function cancelCrop() { exitCropMode(); }
   </script>
 </body>
 </html>

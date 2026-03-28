@@ -28,7 +28,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public'));
 
 // Helper to run ImageMagick commands
@@ -234,6 +234,22 @@ app.get('/api/outputs', (req, res) => {
     .reverse()
     .map(f => `/outputs/${f}`);
   res.json({ outputs: files });
+});
+
+// Save a p5 canvas result as PNG
+app.post('/api/save-canvas', (req, res) => {
+  try {
+    const { imageData } = req.body;
+    if (!imageData) return res.status(400).json({ error: 'No imageData provided' });
+    const base64 = imageData.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64, 'base64');
+    const filename = `output_${Date.now()}.png`;
+    const outputPath = path.join(outputDir, filename);
+    fs.writeFileSync(outputPath, buffer);
+    res.json({ success: true, outputPath: `/outputs/${filename}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Serve uploaded/output files
