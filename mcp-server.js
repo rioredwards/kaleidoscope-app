@@ -113,7 +113,8 @@ async function callApplyEffect({ effect, localFilePath, existingImagePath, param
 
   const form = new FormData();
   if (localFilePath) {
-    form.append('image', fs.createReadStream(localFilePath), path.basename(localFilePath));
+    const fileBuffer = fs.readFileSync(localFilePath);
+    form.append('image', fileBuffer, path.basename(localFilePath));
   } else {
     form.append('existingImage', existingImagePath);
   }
