@@ -362,10 +362,17 @@
     }
 
     .param-group label {
-      display: block;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
       font-size: 0.78em;
       color: #aaa;
       margin-bottom: 4px;
+    }
+    .param-value {
+      color: #4ade80;
+      font-weight: 600;
+      font-size: 1em;
     }
 
     .param-group input[type="text"] {
@@ -376,6 +383,50 @@
       border-radius: 4px;
       color: #fff;
       font-size: 0.8em;
+    }
+
+    .param-group input[type="range"] {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+    .param-group input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #4ade80;
+      cursor: pointer;
+      border: none;
+    }
+    .param-group input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #4ade80;
+      cursor: pointer;
+      border: none;
+    }
+
+    .param-group select {
+      width: 100%;
+      padding: 5px 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      color: #fff;
+      font-size: 0.8em;
+      cursor: pointer;
+    }
+    .param-group select option {
+      background: #2d2d2d;
+      color: #fff;
     }
 
     /* ── DROP OVERLAY ── */
@@ -630,24 +681,76 @@
       popover.innerHTML = '';
 
       if (Object.keys(effect.params).length > 0) {
-        Object.entries(effect.params).forEach(([key, defaultVal]) => {
+        Object.entries(effect.params).forEach(([key, paramDef]) => {
           const group = document.createElement('div');
           group.className = 'param-group';
 
-          const label = document.createElement('label');
-          label.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+          const isSlider = typeof paramDef === 'object' && paramDef.min !== undefined;
+          const isSelect = typeof paramDef === 'object' && paramDef.options;
+          const defaultVal = isSlider ? paramDef.default : (typeof paramDef === 'object' ? paramDef.default : paramDef);
+          const suffix = (isSlider && paramDef.suffix) || '';
+          const currentVal = overrideParams && overrideParams[key] !== undefined ? overrideParams[key] : defaultVal;
 
-          const input = document.createElement('input');
-          input.type = 'text';
-          input.value = overrideParams && overrideParams[key] !== undefined ? overrideParams[key] : defaultVal;
-          input.dataset.param = key;
-          input.onchange = () => {
+          const label = document.createElement('label');
+          const labelText = document.createElement('span');
+          labelText.textContent = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+          label.appendChild(labelText);
+
+          const reprocess = () => {
             const hasSource = uploadedImagePath || (currentSourceType === 'generated' && currentSourcePath);
             if (hasSource && selectedEffect) processImage();
           };
 
-          group.appendChild(label);
-          group.appendChild(input);
+          if (isSelect) {
+            const valueSpan = document.createElement('span');
+            valueSpan.className = 'param-value';
+            valueSpan.textContent = currentVal;
+            label.appendChild(valueSpan);
+
+            const select = document.createElement('select');
+            select.dataset.param = key;
+            select.style.cssText = 'width:100%;padding:5px 8px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#fff;font-size:0.8em;';
+            paramDef.options.forEach(opt => {
+              const option = document.createElement('option');
+              option.value = opt.value !== undefined ? opt.value : opt;
+              option.textContent = opt.label !== undefined ? opt.label : opt;
+              if (String(option.value) === String(currentVal)) option.selected = true;
+              select.appendChild(option);
+            });
+            select.onchange = () => { valueSpan.textContent = select.value; reprocess(); };
+
+            group.appendChild(label);
+            group.appendChild(select);
+          } else if (isSlider) {
+            const valueSpan = document.createElement('span');
+            valueSpan.className = 'param-value';
+            valueSpan.textContent = currentVal + suffix;
+            label.appendChild(valueSpan);
+
+            const input = document.createElement('input');
+            input.type = 'range';
+            input.min = paramDef.min;
+            input.max = paramDef.max;
+            input.step = paramDef.step;
+            input.value = parseFloat(currentVal);
+            input.dataset.param = key;
+            input.dataset.suffix = suffix;
+            input.oninput = () => { valueSpan.textContent = input.value + suffix; };
+            input.onchange = reprocess;
+
+            group.appendChild(label);
+            group.appendChild(input);
+          } else {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentVal;
+            input.dataset.param = key;
+            input.onchange = reprocess;
+
+            group.appendChild(label);
+            group.appendChild(input);
+          }
+
           popover.appendChild(group);
         });
       }
@@ -736,7 +839,8 @@
 
       const params = {};
       document.querySelectorAll('[data-param]').forEach(input => {
-        params[input.dataset.param] = input.value;
+        const suffix = input.dataset.suffix || '';
+        params[input.dataset.param] = input.value + suffix;
       });
       formData.append('params', JSON.stringify(params));
 

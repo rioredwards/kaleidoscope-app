@@ -90,28 +90,19 @@ app.post('/api/process', upload.single('image'), (req, res) => {
         break;
 
       case '6fold_kaleidoscope':
-        command = `-virtual-pixel tile -distort DePolar 0 -gravity Center -crop ${params.cropSize || '17%'}x100%+0+0 +repage -flop `;
-        for(let i = 0; i < 6; i++) {
-          command += `-clone 0 `;
-        }
-        command += `+append -distort Polar 0`;
-        break;
-
       case '8fold_kaleidoscope':
-        command = `-virtual-pixel tile -distort DePolar 0 -gravity Center -crop ${params.cropSize || '12%'}x100%+0+0 +repage -flop `;
-        for(let i = 0; i < 8; i++) {
-          command += `-clone 0 `;
-        }
-        command += `+append -distort Polar 0`;
-        break;
-
       case '12fold_kaleidoscope':
-        command = `-virtual-pixel tile -distort DePolar 0 -gravity Center -crop ${params.cropSize || '8%'}x100%+0+0 +repage -flop `;
-        for(let i = 0; i < 12; i++) {
+      case 'kaleidoscope': {
+        const folds = parseInt(params.folds) || { '6fold_kaleidoscope': 6, '8fold_kaleidoscope': 8, '12fold_kaleidoscope': 12 }[effect] || 8;
+        const defaultCrop = { 6: '17%', 8: '12%', 12: '8%' }[folds] || '12%';
+        const cropSize = params.cropSize || defaultCrop;
+        command = `-virtual-pixel tile -distort DePolar 0 -gravity Center -crop ${cropSize}x100%+0+0 +repage -flop `;
+        for (let i = 0; i < folds; i++) {
           command += `-clone 0 `;
         }
         command += `+append -distort Polar 0`;
         break;
+      }
 
       case 'mandala':
         command = `-gravity center -crop 800x800+0+0 +repage `;
@@ -164,14 +155,15 @@ app.post('/api/process', upload.single('image'), (req, res) => {
 app.get('/api/effects', (req, res) => {
   res.json({
     effects: [
-      { id: '6fold_kaleidoscope', name: '6-Fold Kaleidoscope', params: { cropSize: '17%' } },
-      { id: '8fold_kaleidoscope', name: '8-Fold Kaleidoscope', params: { cropSize: '12%' } },
-      { id: '12fold_kaleidoscope', name: '12-Fold Kaleidoscope', params: { cropSize: '8%' } },
+      { id: 'kaleidoscope', name: 'Kaleidoscope', params: {
+        folds: { default: 8, options: [{ label: '6-fold', value: 6 }, { label: '8-fold', value: 8 }, { label: '12-fold', value: 12 }] },
+        cropSize: { default: 12, min: 1, max: 50, step: 1, suffix: '%' }
+      } },
       { id: 'mandala', name: 'Mandala (8-way rotation)', params: {} },
       { id: 'edge_detect', name: 'Edge Detection', params: {} },
-      { id: 'high_contrast', name: 'High Contrast', params: { contrast: '5' } },
-      { id: 'barrel', name: 'Barrel Distortion', params: { strength: '0.3' } },
-      { id: 'sharpen', name: 'Sharpen', params: { amount: '2' } },
+      { id: 'high_contrast', name: 'High Contrast', params: { contrast: { default: 5, min: 1, max: 20, step: 0.5 } } },
+      { id: 'barrel', name: 'Barrel Distortion', params: { strength: { default: 0.3, min: 0, max: 1, step: 0.05 } } },
+      { id: 'sharpen', name: 'Sharpen', params: { amount: { default: 2, min: 0.5, max: 10, step: 0.5 } } },
     ]
   });
 });
