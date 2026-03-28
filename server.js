@@ -59,6 +59,15 @@ function parseEffectParams(raw) {
   return {};
 }
 
+/** Strength 0–1 for barrel; preserves 0 (no warp). Default 0.3 when missing/invalid. */
+function parseBarrelStrength(params) {
+  const raw = params.strength;
+  if (raw === undefined || raw === null || raw === '') return 0.3;
+  const n = parseFloat(String(raw));
+  if (!Number.isFinite(n)) return 0.3;
+  return Math.min(1, Math.max(0, n));
+}
+
 app.post('/api/process', upload.single('image'), (req, res) => {
   try {
     const { effect, existingImage } = req.body;
@@ -135,10 +144,16 @@ app.post('/api/process', upload.single('image'), (req, res) => {
         command = `-contrast-stretch 0 -sigmoidal-contrast ${params.contrast || '5'}x50%`;
         break;
 
-      case 'barrel':
-        const barrel = params.strength || '0.3';
-        command = `-virtual-pixel white -distort Barrel "0 0 -${barrel}"`;
+      case 'barrel': {
+        const s = parseBarrelStrength(params);
+        // B and C both contribute (per IM docs, |A|>|B|>|C| impact — we avoid tiny C-only curves).
+        // D nudges scale so the mapping stays well-behaved at the rim.
+        const B = (-0.42 * s).toFixed(4);
+        const C = (-0.28 * s).toFixed(4);
+        const D = (1 + 0.15 * s).toFixed(4);
+        command = `-virtual-pixel white -distort Barrel "0 ${B} ${C} ${D}"`;
         break;
+      }
 
       case 'sharpen':
         command = `-sharpen 0x${params.amount || '2'}`;
