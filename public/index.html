@@ -641,6 +641,10 @@
           input.type = 'text';
           input.value = overrideParams && overrideParams[key] !== undefined ? overrideParams[key] : defaultVal;
           input.dataset.param = key;
+          input.onchange = () => {
+            const hasSource = uploadedImagePath || (currentSourceType === 'generated' && currentSourcePath);
+            if (hasSource && selectedEffect) processImage();
+          };
 
           group.appendChild(label);
           group.appendChild(input);
@@ -652,7 +656,11 @@
     }
 
     function selectEffect(effect, btnEl) {
-      populateEffect(effect);
+      const isSameEffect = selectedEffect && selectedEffect.id === effect.id;
+
+      if (!isSameEffect) {
+        populateEffect(effect);
+      }
 
       const popover = document.getElementById('paramPopover');
       if (Object.keys(effect.params).length > 0 && btnEl) {
