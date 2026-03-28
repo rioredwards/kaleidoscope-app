@@ -19,58 +19,73 @@
       padding: 20px;
     }
 
-    .container {
-      max-width: 1200px;
+    .app {
+      max-width: 1400px;
       margin: 0 auto;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
     }
 
     header {
       text-align: center;
-      margin-bottom: 40px;
     }
 
     h1 {
-      font-size: 2.5em;
-      margin-bottom: 10px;
+      font-size: 2em;
       background: linear-gradient(45deg, #fff, #ccc);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
-    .subtitle {
-      color: #999;
-      font-size: 1.1em;
-    }
-
-    .main-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 30px;
-      margin-bottom: 40px;
-    }
-
-    .panel {
+    /* Controls Panel */
+    .controls-panel {
       background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 68, 68, 0.6);
       border-radius: 12px;
-      padding: 24px;
+      padding: 20px;
       backdrop-filter: blur(10px);
     }
 
-    .panel h2 {
-      font-size: 1.3em;
-      margin-bottom: 20px;
-      color: #fff;
+    .controls-title {
+      color: #ff4444;
+      font-weight: 700;
+      font-size: 1.2em;
+      margin-bottom: 16px;
+      text-align: center;
+      background: #fff;
+      color: #ff4444;
+      padding: 6px 16px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .controls-content {
+      display: grid;
+      grid-template-columns: 1fr 2fr 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* Upload section */
+    .upload-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
     .upload-area {
       border: 2px dashed rgba(255, 255, 255, 0.3);
       border-radius: 8px;
-      padding: 30px;
+      padding: 16px;
       text-align: center;
       cursor: pointer;
       transition: all 0.3s ease;
       background: rgba(255, 255, 255, 0.02);
+      font-size: 0.9em;
     }
 
     .upload-area:hover {
@@ -87,46 +102,28 @@
       display: none;
     }
 
-    .upload-text {
-      font-size: 1em;
-      color: #ccc;
-      margin-bottom: 10px;
-    }
-
-    .upload-hint {
-      font-size: 0.9em;
-      color: #999;
-    }
-
-    .image-preview {
-      margin-top: 20px;
-      border-radius: 8px;
-      overflow: hidden;
-      max-width: 100%;
-    }
-
-    .image-preview img {
-      width: 100%;
-      height: auto;
-      display: block;
+    /* Effects section */
+    .effects-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
     .effect-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-bottom: 20px;
+      gap: 8px;
     }
 
     .effect-btn {
-      padding: 12px;
+      padding: 10px;
       background: rgba(255, 255, 255, 0.1);
       border: 1px solid rgba(255, 255, 255, 0.2);
       color: #fff;
       border-radius: 6px;
       cursor: pointer;
       transition: all 0.2s ease;
-      font-size: 0.9em;
+      font-size: 0.85em;
       text-align: left;
     }
 
@@ -140,12 +137,20 @@
       border-color: #22c55e;
     }
 
+    /* Params and button */
+    .action-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
     .params {
       background: rgba(0, 0, 0, 0.3);
       border-radius: 6px;
-      padding: 15px;
-      margin-bottom: 20px;
+      padding: 12px;
       display: none;
+      max-height: 150px;
+      overflow-y: auto;
     }
 
     .params.visible {
@@ -153,7 +158,7 @@
     }
 
     .param-group {
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .param-group:last-child {
@@ -162,40 +167,34 @@
 
     label {
       display: block;
-      font-size: 0.9em;
+      font-size: 0.8em;
       color: #ccc;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
 
     input[type="range"],
     input[type="number"],
     input[type="text"] {
       width: 100%;
-      padding: 8px;
+      padding: 6px;
       background: rgba(255, 255, 255, 0.1);
       border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 4px;
       color: #fff;
-      font-size: 0.9em;
-    }
-
-    input[type="range"] {
-      padding: 0;
-      height: 6px;
+      font-size: 0.8em;
     }
 
     .process-btn {
       width: 100%;
-      padding: 14px;
+      padding: 12px;
       background: linear-gradient(135deg, #3b82f6, #2563eb);
       border: none;
       color: #fff;
       border-radius: 6px;
-      font-size: 1em;
+      font-size: 0.95em;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.3s ease;
-      margin-bottom: 20px;
     }
 
     .process-btn:hover {
@@ -210,11 +209,11 @@
     }
 
     .status {
-      padding: 12px;
+      padding: 10px;
       border-radius: 6px;
-      margin-bottom: 10px;
       display: none;
-      font-size: 0.9em;
+      font-size: 0.85em;
+      text-align: center;
     }
 
     .status.visible {
@@ -239,10 +238,96 @@
       border: 1px solid rgba(239, 68, 68, 0.5);
     }
 
-    .results-grid {
+    /* Main content area */
+    .content-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      grid-template-columns: 1fr 1fr;
       gap: 20px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 68, 68, 0.6);
+      border-radius: 12px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .panel-title {
+      color: #ff4444;
+      font-weight: 700;
+      font-size: 1.2em;
+      margin-bottom: 16px;
+      text-align: center;
+      background: #fff;
+      color: #ff4444;
+      padding: 6px 16px;
+      border-radius: 4px;
+      display: inline-block;
+      align-self: center;
+    }
+
+    /* Sources panel */
+    .sources-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .source-preview {
+      flex: 1;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      position: relative;
+    }
+
+    .source-preview img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    .source-badge {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(74, 222, 128, 0.8);
+      color: #000;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 0.8em;
+      font-weight: 600;
+    }
+
+    .no-source {
+      color: #666;
+      text-align: center;
+    }
+
+    /* Results panel */
+    .results-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .results-scroll {
+      flex: 1;
+      overflow-y: auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+      min-height: 0;
     }
 
     .result-item {
@@ -251,11 +336,14 @@
       border-radius: 8px;
       overflow: hidden;
       transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
     }
 
     .result-item:hover {
       border-color: rgba(255, 255, 255, 0.3);
-      transform: translateY(-4px);
+      transform: translateY(-2px);
     }
 
     .result-image {
@@ -267,32 +355,31 @@
     }
 
     .result-info {
-      padding: 12px;
-    }
-
-    .result-title {
-      font-size: 0.9em;
-      color: #ccc;
-      margin-bottom: 8px;
-      word-break: break-word;
+      padding: 8px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
 
     .result-buttons {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
+      gap: 4px;
     }
 
     .download-btn, .use-source-btn {
-      padding: 8px;
+      padding: 6px;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 0.85em;
+      font-size: 0.75em;
       transition: all 0.2s ease;
       border: 1px solid;
       background: rgba(59, 130, 246, 0.3);
       color: #60a5fa;
       border-color: rgba(59, 130, 246, 0.5);
+      text-decoration: none;
+      text-align: center;
     }
 
     .download-btn:hover {
@@ -310,88 +397,110 @@
     }
 
     .use-source-btn.active {
-      background: rgba(74, 222, 128, 0.5);
+      background: rgba(74, 222, 128, 0.6);
       border-color: #22c55e;
-    }
-
-    .source-badge {
-      display: inline-block;
-      background: rgba(74, 222, 128, 0.3);
-      color: #86efac;
-      padding: 4px 8px;
-      border-radius: 3px;
-      font-size: 0.75em;
-      margin-left: 8px;
     }
 
     .loading-spinner {
       display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 3px solid rgba(255, 255, 255, 0.3);
-      border-top: 3px solid #fff;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top: 2px solid #fff;
       border-radius: 50%;
       animation: spin 0.6s linear infinite;
-      margin-right: 8px;
+      margin-right: 6px;
     }
 
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
 
-    @media (max-width: 768px) {
-      .main-grid {
+    /* Scrollbar styling */
+    .results-scroll::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .results-scroll::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 4px;
+    }
+
+    .results-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+    }
+
+    .results-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    @media (max-width: 1024px) {
+      .controls-content {
         grid-template-columns: 1fr;
       }
 
-      h1 {
-        font-size: 1.8em;
+      .content-grid {
+        grid-template-columns: 1fr;
       }
 
-      .effect-grid {
-        grid-template-columns: 1fr;
+      .app {
+        height: auto;
       }
     }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="app">
     <header>
       <h1>✨ Kaleidoscope Generator</h1>
-      <p class="subtitle">Create mesmerizing kaleidoscope effects from your images</p>
     </header>
 
-    <div class="main-grid">
-      <!-- Upload Panel -->
-      <div class="panel">
-        <h2>1. Upload Image</h2>
-        <div class="upload-area" id="uploadArea">
-          <div class="upload-text">Click or drag image here</div>
-          <div class="upload-hint">Supports JPG, PNG</div>
-          <input type="file" id="imageInput" accept="image/*">
+    <!-- Controls Panel -->
+    <div class="controls-panel">
+      <div class="controls-title">Controls</div>
+      <div class="controls-content">
+        <!-- Upload -->
+        <div class="upload-section">
+          <div class="upload-area" id="uploadArea">
+            <div>Click or drag image</div>
+            <input type="file" id="imageInput" accept="image/*">
+          </div>
         </div>
-        <div class="image-preview" id="preview" style="display: none;">
-          <img id="previewImg" src="" alt="Preview">
+
+        <!-- Effects -->
+        <div class="effects-section">
+          <div class="effect-grid" id="effectGrid"></div>
+          <div class="params" id="paramsContainer"></div>
         </div>
-      </div>
 
-      <!-- Effects Panel -->
-      <div class="panel">
-        <h2>2. Select Effect</h2>
-        <div class="effect-grid" id="effectGrid"></div>
-
-        <div class="params" id="paramsContainer"></div>
-
-        <div class="status" id="status"></div>
-
-        <button class="process-btn" id="processBtn" disabled>Generate Kaleidoscope</button>
+        <!-- Action -->
+        <div class="action-section">
+          <div class="status" id="status"></div>
+          <button class="process-btn" id="processBtn" disabled>Generate</button>
+        </div>
       </div>
     </div>
 
-    <!-- Results -->
-    <div class="panel">
-      <h2>Results</h2>
-      <div class="results-grid" id="results"></div>
+    <!-- Content Grid -->
+    <div class="content-grid">
+      <!-- Sources -->
+      <div class="panel">
+        <div class="panel-title">Sources</div>
+        <div class="sources-panel">
+          <div class="source-preview" id="sourcePreview">
+            <div class="no-source">No image selected</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div class="panel">
+        <div class="panel-title">Results</div>
+        <div class="results-panel">
+          <div class="results-scroll" id="results"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -399,7 +508,7 @@
     let selectedEffect = null;
     let uploadedImagePath = null;
     let currentSourcePath = null;
-    let currentSourceType = null; // 'upload' or 'generated'
+    let currentSourceType = null;
 
     // Load effects
     fetch('/api/effects')
@@ -435,22 +544,17 @@
         return;
       }
 
-      // Reset source type
       currentSourceType = 'upload';
       currentSourcePath = null;
       uploadedImagePath = 'uploaded';
 
-      // Clear previous result selection
       document.querySelectorAll('.use-source-btn.active').forEach(btn => {
         btn.classList.remove('active');
       });
 
-      // Show preview
       const reader = new FileReader();
       reader.onload = (e) => {
-        document.getElementById('previewImg').src = e.target.result;
-        document.getElementById('preview').style.display = 'block';
-        updateSourceBadge();
+        updateSourcePreview(e.target.result, 'upload');
         updateProcessBtn();
       };
       reader.readAsDataURL(file);
@@ -458,16 +562,25 @@
       showStatus('✓ Image uploaded', 'success');
     }
 
+    function updateSourcePreview(src, type) {
+      const preview = document.getElementById('sourcePreview');
+      preview.innerHTML = `<img src="${src}" alt="Source">`;
+      if (type === 'generated') {
+        const badge = document.createElement('div');
+        badge.className = 'source-badge';
+        badge.textContent = 'From result';
+        preview.appendChild(badge);
+      }
+    }
+
     function selectEffect(effect) {
       selectedEffect = effect;
 
-      // Update button states
       document.querySelectorAll('.effect-btn').forEach(btn => {
         btn.classList.remove('active');
       });
       event.target.classList.add('active');
 
-      // Update params
       const paramsContainer = document.getElementById('paramsContainer');
       paramsContainer.innerHTML = '';
       paramsContainer.classList.remove('visible');
@@ -509,7 +622,6 @@
 
       const formData = new FormData();
 
-      // Use either uploaded file or existing generated image
       if (currentSourceType === 'generated' && currentSourcePath) {
         formData.append('existingImage', currentSourcePath);
       } else {
@@ -538,7 +650,7 @@
 
         if (result.success) {
           addResult(selectedEffect.name, result.outputPath);
-          showStatus(`✓ ${result.message}`, 'success');
+          showStatus(`✓ Done`, 'success');
         } else {
           showStatus(result.error, 'error');
         }
@@ -563,56 +675,37 @@
       item.innerHTML = `
         <img src="${imagePath}" alt="${title}" class="result-image">
         <div class="result-info">
-          <div class="result-title">${title}</div>
           <div class="result-buttons">
-            <button class="use-source-btn" id="${buttonId}">Use as source</button>
+            <button class="use-source-btn" id="${buttonId}">Use</button>
             <a href="${imagePath}" download class="download-btn">Download</a>
           </div>
         </div>
       `;
       results.prepend(item);
 
-      // Add click handler for "Use as source" button
-      document.getElementById(buttonId).onclick = () => {
+      document.getElementById(buttonId).onclick = (e) => {
+        e.preventDefault();
         useAsSource(imagePath, buttonId);
       };
     }
 
     function useAsSource(imagePath, buttonId) {
-      // Clear previous selection
       document.querySelectorAll('.use-source-btn.active').forEach(btn => {
         btn.classList.remove('active');
       });
 
-      // Mark this button as active
       document.getElementById(buttonId).classList.add('active');
 
-      // Update preview
-      document.getElementById('previewImg').src = imagePath;
-      document.getElementById('preview').style.display = 'block';
+      updateSourcePreview(imagePath, 'generated');
 
-      // Update current source
       currentSourcePath = imagePath;
       currentSourceType = 'generated';
-      uploadedImagePath = null; // Clear uploaded file
+      uploadedImagePath = null;
       document.getElementById('imageInput').value = '';
 
-      updateSourceBadge();
       updateProcessBtn();
 
-      showStatus('✓ Using result as source for next effect', 'success');
-    }
-
-    function updateSourceBadge() {
-      const badge = document.querySelector('.source-badge');
-      if (badge) badge.remove();
-
-      if (currentSourceType === 'generated') {
-        const newBadge = document.createElement('span');
-        newBadge.className = 'source-badge';
-        newBadge.textContent = 'From result';
-        document.querySelector('.image-preview').insertAdjacentElement('beforeend', newBadge);
-      }
+      showStatus('✓ Using result as source', 'success');
     }
   </script>
 </body>
