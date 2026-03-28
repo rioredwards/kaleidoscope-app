@@ -328,11 +328,48 @@
       overflow: hidden;
       position: relative;
     }
-    .image-panel img {
+    .image-panel .source-view {
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .source-img-wrap {
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+      max-height: 100%;
+    }
+    .source-img-wrap .source-img {
       max-width: 100%;
       max-height: 100%;
       object-fit: contain;
       display: block;
+      vertical-align: middle;
+    }
+    .image-panel.source-panel--kaleidoscope .source-img {
+      cursor: crosshair;
+      -webkit-user-drag: none;
+      user-select: none;
+    }
+    .kaleidoscope-center-marker {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      margin-left: -11px;
+      margin-top: -11px;
+      border: 2px solid #4ade80;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6);
+      pointer-events: none;
+      z-index: 2;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
     }
 
     .panel-label {
@@ -677,6 +714,31 @@
     let currentResultPath = null;
     let sourceHistory = [];
     let resultHistory = [];
+    /** Normalized 0–1 point on source image: kaleidoscope sampling center (client P5 only) */
+    let kaleidoscopeCenter = { x: 0.5, y: 0.5 };
+
+    function syncKaleidoscopeMarker() {
+      const panel = document.getElementById('sourcePanel');
+      const marker = document.getElementById('kaleidoscopeCenterMarker');
+      const img = panel?.querySelector('.source-img');
+      const cropping = document.getElementById('cropBtn')?.classList.contains('crop-active');
+      if (!panel || !marker || !img) {
+        panel?.classList.remove('source-panel--kaleidoscope');
+        panel?.removeAttribute('title');
+        return;
+      }
+      const k = selectedEffect?.id === 'kaleidoscope';
+      panel.classList.toggle('source-panel--kaleidoscope', k && !cropping);
+      if (!k || cropping) {
+        marker.hidden = true;
+        panel.title = '';
+        return;
+      }
+      marker.hidden = false;
+      marker.style.left = (kaleidoscopeCenter.x * 100) + '%';
+      marker.style.top = (kaleidoscopeCenter.y * 100) + '%';
+      panel.title = 'Click to set kaleidoscope sampling center';
+    }
 
     // ── INIT ──
     fetch('/api/effects')
@@ -700,17 +762,26 @@
       if (e.target.files[0]) handleImageUpload(e.target.files[0]);
     };
 
-    // Drag-drop on the whole window
+    // Drag-drop on the whole window (only for OS / external file drags — not native <img> drags)
     let dragCounter = 0;
     const dropOverlay = document.getElementById('dropOverlay');
 
+    function isExternalFileDrag(e) {
+      const t = e.dataTransfer?.types;
+      if (!t) return false;
+      const arr = Array.from(t);
+      return arr.includes('Files') || arr.includes('application/x-moz-file');
+    }
+
     document.body.addEventListener('dragenter', (e) => {
       e.preventDefault();
+      if (!isExternalFileDrag(e)) return;
       dragCounter++;
       dropOverlay.classList.add('active');
     });
     document.body.addEventListener('dragleave', (e) => {
       e.preventDefault();
+      if (!isExternalFileDrag(e)) return;
       dragCounter--;
       if (dragCounter <= 0) {
         dragCounter = 0;
@@ -751,13 +822,22 @@
     // ── SOURCE PREVIEW ──
     function updateSourcePreview(src, type) {
       const panel = document.getElementById('sourcePanel');
-      panel.innerHTML = `<span class="panel-label">Source</span><img src="${src}" alt="Source">`;
+      panel.innerHTML = `
+        <span class="panel-label">Source</span>
+        <div class="source-view">
+          <div class="source-img-wrap">
+            <img class="source-img" src="${src}" alt="Source" draggable="false">
+            <div class="kaleidoscope-center-marker" id="kaleidoscopeCenterMarker" hidden></div>
+          </div>
+        </div>
+      `;
       if (type === 'generated') {
         const badge = document.createElement('div');
         badge.className = 'source-badge';
         badge.textContent = 'From result';
         panel.appendChild(badge);
       }
+      syncKaleidoscopeMarker();
     }
 
     // ── SOURCE HISTORY ──
@@ -821,6 +901,13 @@
     // ── EFFECTS ──
     function populateEffect(effect, overrideParams) {
       selectedEffect = effect;
+
+      if (effect.id === 'kaleidoscope' && overrideParams && overrideParams.centerX != null && overrideParams.centerY != null) {
+        const cx = parseFloat(String(overrideParams.centerX).replace(/%$/, ''));
+        const cy = parseFloat(String(overrideParams.centerY).replace(/%$/, ''));
+        if (!Number.isNaN(cx)) kaleidoscopeCenter.x = Math.min(1, Math.max(0, cx));
+        if (!Number.isNaN(cy)) kaleidoscopeCenter.y = Math.min(1, Math.max(0, cy));
+      }
 
       document.querySelectorAll('.effect-btn').forEach(btn => {
         btn.classList.toggle('active', btn.textContent === effect.name);
@@ -908,12 +995,16 @@
       }
 
       updateSavePresetBtn();
+      syncKaleidoscopeMarker();
     }
 
     function selectEffect(effect, btnEl) {
       const isSameEffect = selectedEffect && selectedEffect.id === effect.id;
 
       if (!isSameEffect) {
+        if (effect.id === 'kaleidoscope' && (!selectedEffect || selectedEffect.id !== 'kaleidoscope')) {
+          kaleidoscopeCenter = { x: 0.5, y: 0.5 };
+        }
         populateEffect(effect);
       }
 
@@ -968,6 +1059,10 @@
         const suffix = el.dataset.suffix || '';
         params[el.dataset.param] = el.value + suffix;
       });
+      if (selectedEffect && selectedEffect.id === 'kaleidoscope') {
+        params.centerX = String(kaleidoscopeCenter.x);
+        params.centerY = String(kaleidoscopeCenter.y);
+      }
       return params;
     }
 
@@ -983,6 +1078,62 @@
         showStatus('', 'clear');
       }, 0);
     }
+
+    let kaleidoscopeCenterDrag = null;
+    let kaleidoscopeProcessDragTimer = null;
+
+    function setKaleidoscopeCenterFromClient(img, clientX, clientY) {
+      const rect = img.getBoundingClientRect();
+      kaleidoscopeCenter = {
+        x: Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)),
+        y: Math.min(1, Math.max(0, (clientY - rect.top) / rect.height)),
+      };
+      syncKaleidoscopeMarker();
+    }
+
+    function scheduleProcessWhileDraggingKaleidoscope() {
+      if (kaleidoscopeProcessDragTimer) return;
+      kaleidoscopeProcessDragTimer = setTimeout(() => {
+        kaleidoscopeProcessDragTimer = null;
+        if (selectedEffect?.id === 'kaleidoscope') processImage();
+      }, 90);
+    }
+
+    document.getElementById('sourcePanel').addEventListener('pointerdown', (e) => {
+      if (document.getElementById('cropBtn').classList.contains('crop-active')) return;
+      if (selectedEffect?.id !== 'kaleidoscope') return;
+      const img = e.target.closest('.source-img');
+      if (!img) return;
+      e.preventDefault();
+      kaleidoscopeCenterDrag = { img, pointerId: e.pointerId };
+      try {
+        img.setPointerCapture(e.pointerId);
+      } catch (_) { /* ignore */ }
+      setKaleidoscopeCenterFromClient(img, e.clientX, e.clientY);
+      scheduleProcessWhileDraggingKaleidoscope();
+    });
+
+    document.addEventListener('pointermove', (e) => {
+      if (!kaleidoscopeCenterDrag || e.pointerId !== kaleidoscopeCenterDrag.pointerId) return;
+      setKaleidoscopeCenterFromClient(kaleidoscopeCenterDrag.img, e.clientX, e.clientY);
+      scheduleProcessWhileDraggingKaleidoscope();
+    });
+
+    function endKaleidoscopeCenterDrag(e) {
+      if (!kaleidoscopeCenterDrag || e.pointerId !== kaleidoscopeCenterDrag.pointerId) return;
+      const { img, pointerId } = kaleidoscopeCenterDrag;
+      kaleidoscopeCenterDrag = null;
+      clearTimeout(kaleidoscopeProcessDragTimer);
+      kaleidoscopeProcessDragTimer = null;
+      try {
+        img.releasePointerCapture(pointerId);
+      } catch (_) { /* ignore */ }
+      setKaleidoscopeCenterFromClient(img, e.clientX, e.clientY);
+      if (selectedEffect?.id === 'kaleidoscope') processImage();
+    }
+
+    document.addEventListener('pointerup', endKaleidoscopeCenterDrag);
+    document.addEventListener('pointercancel', endKaleidoscopeCenterDrag);
 
     async function saveResult() {
       if (!window.resultP5 || !window.resultP5.hasResult()) return;
@@ -1240,6 +1391,7 @@
       panel.appendChild(actions);
       cropEls = { overlay, sel, actions };
       syncCropSelection();
+      syncKaleidoscopeMarker();
 
       overlay.addEventListener('mousedown', onCropDown);
       document.addEventListener('mousemove', onCropMove);
@@ -1258,6 +1410,7 @@
         cropEls = null;
       }
       cropDrag = null;
+      syncKaleidoscopeMarker();
     }
 
     function getCropMapping() {

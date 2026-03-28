@@ -58,7 +58,12 @@ function applyKaleidoscope(p, img, params) {
   img.loadPixels();
   out.loadPixels();
 
-  const cx = w / 2, cy = h / 2;
+  const ncx = parseFloat(params.centerX);
+  const ncy = parseFloat(params.centerY);
+  const cx =
+    (Number.isFinite(ncx) ? Math.max(0, Math.min(1, ncx)) : 0.5) * w;
+  const cy =
+    (Number.isFinite(ncy) ? Math.max(0, Math.min(1, ncy)) : 0.5) * h;
   const ocx = size / 2, ocy = size / 2;
   const maxR = size / 2;
   const segAngle = (2 * Math.PI) / folds;
