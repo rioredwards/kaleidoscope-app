@@ -1,5 +1,8 @@
 /* p5-canvas.js — p5.js instance-mode sketch managing the result canvas */
 
+import p5 from 'p5';
+import { EFFECTS } from './effects.js';
+
 const resultSketch = (p) => {
   const ABS_MAX_DIM = 8192;
   let options = {
@@ -8,7 +11,9 @@ const resultSketch = (p) => {
     maxPreviewPx: 600,
   };
   let lastSrc = null;
+  let lastBlendSrc = null;
   let sourceImg = null;
+  let blendImg = null;
   let resultImg = null;
   let sourceLoading = false;
   let pendingEffect = null;
@@ -116,14 +121,20 @@ const resultSketch = (p) => {
     loadSourceImage(src) {
       lastSrc = src;
       sourceLoading = true;
-      p.loadImage(
-        src,
-        onSourceLoaded,
-        () => {
-          sourceLoading = false;
-          console.error('Failed to load source image');
-        }
-      );
+      return new Promise((resolve, reject) => {
+        p.loadImage(
+          src,
+          (loaded) => {
+            onSourceLoaded(loaded);
+            resolve();
+          },
+          () => {
+            sourceLoading = false;
+            console.error('Failed to load source image');
+            reject(new Error('source'));
+          }
+        );
+      });
     },
 
     applyEffect(effectId, params) {
@@ -137,7 +148,11 @@ const resultSketch = (p) => {
         syncSamplingMode();
         const fn = EFFECTS[effectId];
         if (fn) {
-          resultImg = fn(p, sourceImg, params);
+          const runParams = { ...params };
+          if (effectId === 'blend' && blendImg) {
+            runParams._topImage = blendImg;
+          }
+          resultImg = fn(p, sourceImg, runParams);
           p.redraw();
         } else {
           console.warn('Unknown client effect:', effectId);
@@ -155,7 +170,22 @@ const resultSketch = (p) => {
           lastSrc,
           (loaded) => {
             onSourceLoaded(loaded);
-            resolve();
+            if (lastBlendSrc) {
+              p.loadImage(
+                lastBlendSrc,
+                (bloaded) => {
+                  blendImg = downscale(bloaded);
+                  resolve();
+                },
+                () => {
+                  blendImg = null;
+                  lastBlendSrc = null;
+                  resolve();
+                }
+              );
+            } else {
+              resolve();
+            }
           },
           () => {
             sourceLoading = false;
@@ -164,6 +194,34 @@ const resultSketch = (p) => {
           }
         );
       });
+    },
+
+    loadBlendImage(src) {
+      lastBlendSrc = src;
+      return new Promise((resolve, reject) => {
+        p.loadImage(
+          src,
+          (loaded) => {
+            blendImg = downscale(loaded);
+            resolve();
+          },
+          () => {
+            blendImg = null;
+            lastBlendSrc = null;
+            console.error('Failed to load blend image');
+            reject(new Error('blend'));
+          }
+        );
+      });
+    },
+
+    clearBlendImage() {
+      blendImg = null;
+      lastBlendSrc = null;
+    },
+
+    hasBlendImage() {
+      return !!blendImg;
     },
 
     getOptions() {

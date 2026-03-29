@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kaleidoscope Generator</title>
+</head>
+<body>
+  <div class="app">
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      <button class="toolbar-btn upload-btn" id="uploadBtn">Upload</button>
+      <input type="file" id="imageInput" accept="image/*" style="display:none">
+      <button class="toolbar-btn" id="cropBtn" onclick="toggleCropMode()">Crop</button>
+
+      <div class="toolbar-divider"></div>
+
+      <div class="toolbar-effects" id="effectGrid"></div>
+
+      <div class="toolbar-divider"></div>
+
+      <span class="presets-label">Presets</span>
+      <div class="preset-chips" id="presetChips"></div>
+      <button class="save-preset-btn" id="savePresetBtn" disabled>+ Save</button>
+
+      <div class="toolbar-divider"></div>
+
+      <div class="toolbar-status">
+        <div class="status" id="status"></div>
+      </div>
+    </div>
+
+    <div class="toolbar-sub" id="clientPreviewBar" hidden>
+      <span class="toolbar-sub-label">Sharp pixels &amp; preview</span>
+      <label class="toolbar-opt" title="Nearest-neighbor: crisp pixels when scaling, remapping, and cropping (no soft anti-aliasing blur)">
+        <input type="checkbox" id="sharpPixels">
+        Sharp pixels
+      </label>
+      <select class="toolbar-select" id="maxPreviewPx" title="Max width/height for client preview (larger keeps more detail; slower)">
+        <option value="600">Preview 600px</option>
+        <option value="1600">Preview 1600px</option>
+        <option value="0">Full (cap 8k)</option>
+      </select>
+      <span style="color:rgba(255,255,255,0.35);font-size:0.8em;">Processing runs in your browser; use Save/Download for a file.</span>
+    </div>
+
+    <div class="toolbar-sub toolbar-sub--blend" id="blendLayerBar" hidden>
+      <span class="toolbar-sub-label">Blend layer</span>
+      <button type="button" class="toolbar-btn blend-btn" id="blendTryDemoBtn" title="Load sample colors and run Blend so you can see it working">Try demo</button>
+      <details class="blend-help-details">
+        <summary>How to use Blend</summary>
+        <ol class="blend-help-list">
+          <li>Use <strong><code>npm run dev</code></strong> for hot reload; API runs on port 3000.</li>
+          <li>Set your main picture (Upload / Sources) — that is the <em>bottom</em> layer.</li>
+          <li>Here, choose <strong>Choose image</strong> or <strong>Use result</strong> — that is the <em>top</em> layer (status shows <strong>Ready</strong>).</li>
+          <li>This row appears only when <strong>Blend</strong> is selected in the effect bar above.</li>
+          <li>Change <strong>Mode</strong> and <strong>Opacity</strong> here; the result updates on the right.</li>
+        </ol>
+      </details>
+      <input type="file" id="blendImageInput" accept="image/*" style="display:none">
+      <button type="button" class="toolbar-btn blend-btn" id="blendImagePickBtn">Choose image</button>
+      <button type="button" class="toolbar-btn blend-btn" id="blendUseResultBtn" title="Use the image from the selected result in the strip">Use result</button>
+      <button type="button" class="toolbar-btn blend-btn" id="blendClearBtn">Clear blend</button>
+      <span class="blend-status" id="blendImageStatus">None</span>
+      <div class="blend-controls">
+        <label>Mode
+          <select id="blendModeBar" title="Blend mode (Blend effect only)">
+            <option value="multiply">Multiply</option>
+            <option value="screen">Screen</option>
+            <option value="overlay">Overlay</option>
+            <option value="darken">Darken</option>
+            <option value="lighten">Lighten</option>
+            <option value="hard_light">Hard light</option>
+            <option value="soft_light">Soft light</option>
+            <option value="difference">Difference</option>
+            <option value="exclusion">Exclusion</option>
+            <option value="color_dodge">Color dodge</option>
+            <option value="color_burn">Color burn</option>
+          </select>
+        </label>
+        <label>Opacity <input type="range" id="blendOpacityBar" min="0" max="1" step="0.05" value="0.85"><span class="blend-opacity-val" id="blendOpacityValue">0.85</span></label>
+      </div>
+    </div>
+
+    <!-- MAIN AREA -->
+    <div class="main-area">
+      <div class="history-strip source-strip" id="sourceHistoryStrip">
+        <span class="strip-label">Sources</span>
+      </div>
+
+      <div class="image-panel" id="sourcePanel">
+        <span class="panel-label">Source</span>
+        <div class="no-image-msg">Upload or drag an image</div>
+      </div>
+
+      <div class="image-panel" id="resultPanel">
+        <span class="panel-label">Result</span>
+        <div class="no-image-msg" id="resultPlaceholder">Select an effect</div>
+        <div id="resultCanvas"></div>
+        <div class="result-actions" id="resultActions" style="display:none">
+          <button class="result-action-btn save-btn" onclick="saveResult()">Save</button>
+          <button class="result-action-btn" onclick="downloadResult()">Download</button>
+        </div>
+      </div>
+
+      <div class="history-strip result-strip" id="resultHistoryStrip">
+        <span class="strip-label">Results</span>
+      </div>
+    </div>
+
+    <!-- PARAM POPOVER -->
+    <div class="param-popover" id="paramPopover"></div>
+
+    <!-- DROP OVERLAY -->
+    <div class="drop-overlay" id="dropOverlay">
+      <div class="drop-overlay-text">Drop image to upload</div>
+    </div>
+
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

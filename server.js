@@ -29,7 +29,18 @@ const upload = multer({ storage });
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
-app.use(express.static('public'));
+
+const distIndex = path.join(__dirname, 'dist', 'index.html');
+const publicIndex = path.join(__dirname, 'public', 'index.html');
+const staticRoot = fs.existsSync(distIndex)
+  ? path.join(__dirname, 'dist')
+  : fs.existsSync(publicIndex)
+    ? path.join(__dirname, 'public')
+    : path.join(__dirname, 'dist');
+app.use(express.static(staticRoot));
+if (!fs.existsSync(distIndex) && !fs.existsSync(publicIndex)) {
+  console.warn('No built UI in dist/ (run `npm run build`) and no public/index.html. Use `npm run dev` for development.');
+}
 
 // Helper to run ImageMagick commands
 function runMagick(inputPath, command, outputPath) {
@@ -159,6 +170,11 @@ app.post('/api/process', upload.single('image'), (req, res) => {
         command = `-sharpen 0x${params.amount || '2'}`;
         break;
 
+      case 'blend':
+        return res.status(400).json({
+          error: 'Blend runs in the browser preview only (two layers). Use the P5 preview and Blend layer.',
+        });
+
       default:
         return res.status(400).json({ error: 'Unknown effect' });
     }
@@ -188,6 +204,22 @@ app.get('/api/effects', (req, res) => {
       { id: 'kaleidoscope', name: 'Kaleidoscope', params: {
         folds: { default: 8, options: [{ label: '6-fold', value: 6 }, { label: '8-fold', value: 8 }, { label: '12-fold', value: 12 }] },
         cropSize: { default: 12, min: 1, max: 50, step: 1, suffix: '%' }
+      } },
+      { id: 'blend', name: 'Blend', params: {
+        blendMode: { default: 'multiply', options: [
+          { label: 'Multiply', value: 'multiply' },
+          { label: 'Screen', value: 'screen' },
+          { label: 'Overlay', value: 'overlay' },
+          { label: 'Darken', value: 'darken' },
+          { label: 'Lighten', value: 'lighten' },
+          { label: 'Hard light', value: 'hard_light' },
+          { label: 'Soft light', value: 'soft_light' },
+          { label: 'Difference', value: 'difference' },
+          { label: 'Exclusion', value: 'exclusion' },
+          { label: 'Color dodge', value: 'color_dodge' },
+          { label: 'Color burn', value: 'color_burn' },
+        ] },
+        opacity: { default: 0.85, min: 0, max: 1, step: 0.05 },
       } },
       { id: 'mandala', name: 'Mandala (8-way rotation)', params: {} },
       { id: 'edge_detect', name: 'Edge Detection', params: {} },

@@ -17,12 +17,18 @@ cd ~/kaleidoscope-app
 npm install
 ```
 
-3. Start the server:
+3. Development (Vite HMR + API on port 3000):
 ```bash
+npm run dev
+```
+Open **http://localhost:5173** (Vite proxies `/api`, `/uploads`, `/outputs` to the API server).
+
+4. Production-style (built static files + API on one port):
+```bash
+npm run build
 npm start
 ```
-
-4. Open your browser to: **http://localhost:3000**
+Open **http://localhost:3000**
 
 ## Features
 

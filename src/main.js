@@ -1,744 +1,44 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kaleidoscope Generator</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+import './style.css';
+import './p5-canvas.js';
 
-    html, body {
-      height: 100%;
-      overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #1a1a1a;
-      color: #fff;
-    }
+// ── STATE ──
+let selectedEffect = null;
+let uploadedImagePath = null;
+let currentSourcePath = null;
+let currentSourceType = null;
+let currentSourceDataURI = null;
+let activeSourceId = null;
+let currentResultPath = null;
+let sourceHistory = [];
+let resultHistory = [];
+/** Normalized 0–1 point on source image: kaleidoscope sampling center (client P5 only) */
+let kaleidoscopeCenter = { x: 0.5, y: 0.5 };
 
-    .app {
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
+function syncKaleidoscopeMarker() {
+  const panel = document.getElementById('sourcePanel');
+  const marker = document.getElementById('kaleidoscopeCenterMarker');
+  const img = panel?.querySelector('.source-img');
+  const cropping = document.getElementById('cropBtn')?.classList.contains('crop-active');
+  if (!panel || !marker || !img) {
+    panel?.classList.remove('source-panel--kaleidoscope');
+    panel?.removeAttribute('title');
+    return;
+  }
+  const k = selectedEffect?.id === 'kaleidoscope';
+  panel.classList.toggle('source-panel--kaleidoscope', k && !cropping);
+  if (!k || cropping) {
+    marker.hidden = true;
+    panel.title = '';
+    return;
+  }
+  marker.hidden = false;
+  marker.style.left = (kaleidoscopeCenter.x * 100) + '%';
+  marker.style.top = (kaleidoscopeCenter.y * 100) + '%';
+  panel.title = 'Click to set kaleidoscope sampling center';
+}
 
-    /* ── TOOLBAR ── */
-    .toolbar {
-      height: 48px;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 0 12px;
-      background: #2d2d2d;
-      border-bottom: 1px solid rgba(255, 68, 68, 0.4);
-      overflow: hidden;
-    }
-
-    .toolbar-btn {
-      flex-shrink: 0;
-      padding: 6px 12px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: #fff;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.8em;
-      transition: background 0.15s;
-    }
-    .toolbar-btn:hover {
-      background: rgba(255, 255, 255, 0.2);
-    }
-
-    .toolbar-divider {
-      width: 1px;
-      height: 28px;
-      background: rgba(255, 255, 255, 0.15);
-      flex-shrink: 0;
-    }
-
-    .toolbar-effects {
-      display: flex;
-      gap: 6px;
-      flex: 1;
-      min-width: 0;
-      overflow-x: auto;
-      scrollbar-width: none;
-      align-items: center;
-    }
-    .toolbar-effects::-webkit-scrollbar { display: none; }
-
-    .effect-btn {
-      flex-shrink: 0;
-      padding: 5px 10px;
-      font-size: 0.78em;
-      white-space: nowrap;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 4px;
-      color: #ccc;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .effect-btn:hover {
-      background: rgba(255, 255, 255, 0.15);
-      color: #fff;
-    }
-    .effect-btn.active {
-      background: linear-gradient(135deg, #4ade80, #22c55e);
-      border-color: #22c55e;
-      color: #000;
-      font-weight: 600;
-    }
-
-    .presets-label {
-      color: #ff4444;
-      font-weight: 600;
-      font-size: 0.78em;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-
-    .preset-chips {
-      display: flex;
-      gap: 4px;
-      overflow-x: auto;
-      scrollbar-width: none;
-      flex-shrink: 1;
-      min-width: 0;
-    }
-    .preset-chips::-webkit-scrollbar { display: none; }
-
-    .preset-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px 8px;
-      background: rgba(74, 222, 128, 0.15);
-      border: 1px solid rgba(74, 222, 128, 0.4);
-      color: #86efac;
-      border-radius: 3px;
-      font-size: 0.75em;
-      cursor: pointer;
-      transition: background 0.15s;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .preset-chip:hover {
-      background: rgba(74, 222, 128, 0.3);
-    }
-    .preset-chip .delete-btn {
-      background: none;
-      border: none;
-      color: #86efac;
-      cursor: pointer;
-      font-size: 1em;
-      padding: 0;
-      line-height: 1;
-    }
-    .preset-chip .delete-btn:hover {
-      color: #ff6b6b;
-    }
-
-    .save-preset-btn {
-      flex-shrink: 0;
-      padding: 3px 8px;
-      background: rgba(59, 130, 246, 0.15);
-      border: 1px solid rgba(59, 130, 246, 0.4);
-      color: #60a5fa;
-      border-radius: 3px;
-      font-size: 0.75em;
-      cursor: pointer;
-      transition: background 0.15s;
-      white-space: nowrap;
-    }
-    .save-preset-btn:hover:not(:disabled) {
-      background: rgba(59, 130, 246, 0.3);
-    }
-    .save-preset-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-
-    .toolbar-status {
-      flex-shrink: 0;
-      max-width: 200px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .toolbar-opt {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 0.72em;
-      color: #bbb;
-      white-space: nowrap;
-      flex-shrink: 0;
-      cursor: pointer;
-      user-select: none;
-    }
-    .toolbar-opt input {
-      accent-color: #4ade80;
-      cursor: pointer;
-    }
-    .toolbar-select {
-      padding: 4px 6px;
-      font-size: 0.72em;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 4px;
-      color: #fff;
-      max-width: 140px;
-      cursor: pointer;
-    }
-
-    /* Second row: P5 client options (kept out of the crowded effect strip) */
-    .toolbar-sub {
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 10px 16px;
-      padding: 8px 12px;
-      background: #252525;
-      border-bottom: 1px solid rgba(255, 68, 68, 0.25);
-      font-size: 0.82em;
-    }
-    .toolbar-sub-label {
-      color: #86efac;
-      font-weight: 600;
-      font-size: 0.85em;
-      letter-spacing: 0.02em;
-    }
-    .toolbar-sub .toolbar-opt {
-      font-size: 0.95em;
-      color: #e8e8e8;
-    }
-
-    .status {
-      display: none;
-      font-size: 0.75em;
-      padding: 3px 8px;
-      border-radius: 3px;
-    }
-    .status.loading {
-      display: inline-flex;
-      align-items: center;
-      background: rgba(59, 130, 246, 0.2);
-      color: #60a5fa;
-    }
-    .status.success {
-      display: inline-flex;
-      align-items: center;
-      background: rgba(74, 222, 128, 0.2);
-      color: #86efac;
-    }
-    .status.error {
-      display: inline-flex;
-      align-items: center;
-      background: rgba(239, 68, 68, 0.2);
-      color: #fca5a5;
-    }
-
-    .loading-spinner {
-      display: inline-block;
-      width: 12px;
-      height: 12px;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      border-top: 2px solid #60a5fa;
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-      margin-right: 4px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── MAIN AREA ── */
-    .main-area {
-      flex: 1;
-      min-height: 0;
-      display: grid;
-      grid-template-columns: 110px 1fr 1fr 110px;
-      overflow: hidden;
-    }
-
-    /* ── HISTORY STRIPS ── */
-    .history-strip {
-      background: #1e1e1e;
-      overflow-y: auto;
-      overflow-x: hidden;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 4px;
-    }
-    .history-strip::-webkit-scrollbar { width: 4px; }
-    .history-strip::-webkit-scrollbar-track { background: transparent; }
-    .history-strip::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 2px; }
-
-    .source-strip {
-      border-right: 1px solid rgba(255, 255, 255, 0.06);
-    }
-    .result-strip {
-      border-left: 1px solid rgba(255, 255, 255, 0.06);
-    }
-
-    .history-thumb {
-      width: 92px;
-      height: 92px;
-      flex-shrink: 0;
-      border-radius: 6px;
-      overflow: hidden;
-      cursor: pointer;
-      border: 2px solid transparent;
-      transition: border-color 0.15s;
-      background: #111;
-    }
-    .history-thumb img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-    .history-thumb.active {
-      border-color: #4ade80;
-    }
-    .history-thumb:hover:not(.active) {
-      border-color: rgba(255, 255, 255, 0.3);
-    }
-
-    .strip-label {
-      font-size: 0.65em;
-      font-weight: 600;
-      color: rgba(255, 255, 255, 0.25);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      padding: 4px 0 2px;
-      flex-shrink: 0;
-    }
-
-    /* ── IMAGE PANELS ── */
-    .image-panel {
-      background: #111;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      position: relative;
-    }
-    .image-panel .source-view {
-      flex: 1;
-      min-height: 0;
-      min-width: 0;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .source-img-wrap {
-      position: relative;
-      display: inline-block;
-      max-width: 100%;
-      max-height: 100%;
-    }
-    .source-img-wrap .source-img {
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-      display: block;
-      vertical-align: middle;
-    }
-    .image-panel.source-panel--kaleidoscope .source-img {
-      cursor: crosshair;
-      -webkit-user-drag: none;
-      user-select: none;
-    }
-    .kaleidoscope-center-marker {
-      position: absolute;
-      width: 22px;
-      height: 22px;
-      margin-left: -11px;
-      margin-top: -11px;
-      border: 2px solid #4ade80;
-      border-radius: 50%;
-      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6);
-      pointer-events: none;
-      z-index: 2;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-    }
-
-    .panel-label {
-      position: absolute;
-      top: 8px;
-      left: 12px;
-      font-size: 0.7em;
-      font-weight: 600;
-      color: rgba(255, 255, 255, 0.25);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      pointer-events: none;
-      z-index: 1;
-    }
-
-    .source-badge {
-      position: absolute;
-      top: 8px;
-      right: 12px;
-      background: rgba(74, 222, 128, 0.7);
-      color: #000;
-      padding: 3px 8px;
-      border-radius: 3px;
-      font-size: 0.7em;
-      font-weight: 600;
-      z-index: 1;
-    }
-
-    .no-image-msg {
-      color: rgba(255, 255, 255, 0.2);
-      font-size: 0.9em;
-    }
-
-    .result-download-btn {
-      position: absolute;
-      bottom: 10px;
-      right: 10px;
-      background: rgba(59, 130, 246, 0.3);
-      border: 1px solid rgba(59, 130, 246, 0.5);
-      color: #60a5fa;
-      border-radius: 4px;
-      padding: 5px 10px;
-      font-size: 0.78em;
-      text-decoration: none;
-      transition: background 0.15s;
-      z-index: 1;
-    }
-    .result-download-btn:hover {
-      background: rgba(59, 130, 246, 0.5);
-    }
-
-    /* ── PARAM POPOVER ── */
-    .param-popover {
-      position: fixed;
-      z-index: 1000;
-      display: none;
-      background: #2d2d2d;
-      border: 1px solid rgba(255, 68, 68, 0.5);
-      border-radius: 8px;
-      padding: 12px;
-      min-width: 200px;
-      max-width: 280px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-      max-height: calc(100vh - 60px);
-      overflow-y: auto;
-    }
-    .param-popover.visible {
-      display: block;
-    }
-
-    .param-group {
-      margin-bottom: 10px;
-    }
-    .param-group:last-child {
-      margin-bottom: 0;
-    }
-
-    .param-group label {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      font-size: 0.78em;
-      color: #aaa;
-      margin-bottom: 4px;
-    }
-    .param-value {
-      color: #4ade80;
-      font-weight: 600;
-      font-size: 1em;
-    }
-
-    .param-group input[type="text"] {
-      width: 100%;
-      padding: 5px 8px;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 4px;
-      color: #fff;
-      font-size: 0.8em;
-    }
-
-    .param-group input[type="range"] {
-      width: 100%;
-      height: 6px;
-      -webkit-appearance: none;
-      appearance: none;
-      background: rgba(255, 255, 255, 0.12);
-      border-radius: 3px;
-      outline: none;
-      cursor: pointer;
-    }
-    .param-group input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: #4ade80;
-      cursor: pointer;
-      border: none;
-    }
-    .param-group input[type="range"]::-moz-range-thumb {
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: #4ade80;
-      cursor: pointer;
-      border: none;
-    }
-
-    .param-group select {
-      width: 100%;
-      padding: 5px 8px;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 4px;
-      color: #fff;
-      font-size: 0.8em;
-      cursor: pointer;
-    }
-    .param-group select option {
-      background: #2d2d2d;
-      color: #fff;
-    }
-
-    /* ── DROP OVERLAY ── */
-    .drop-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: 900;
-      background: rgba(74, 222, 128, 0.08);
-      border: 3px dashed rgba(74, 222, 128, 0.5);
-      align-items: center;
-      justify-content: center;
-      pointer-events: none;
-    }
-    .drop-overlay.active {
-      display: flex;
-    }
-    .drop-overlay-text {
-      background: rgba(0, 0, 0, 0.7);
-      padding: 16px 32px;
-      border-radius: 8px;
-      font-size: 1.2em;
-      color: #4ade80;
-    }
-
-    /* ── RESULT CANVAS ── */
-    #resultCanvas {
-      position: absolute;
-      inset: 0;
-    }
-    #resultCanvas canvas {
-      display: block;
-    }
-
-    .result-actions {
-      position: absolute;
-      bottom: 10px;
-      right: 10px;
-      display: flex;
-      gap: 6px;
-      z-index: 1;
-    }
-    .result-action-btn {
-      background: rgba(59, 130, 246, 0.3);
-      border: 1px solid rgba(59, 130, 246, 0.5);
-      color: #60a5fa;
-      border-radius: 4px;
-      padding: 5px 10px;
-      font-size: 0.78em;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .result-action-btn:hover {
-      background: rgba(59, 130, 246, 0.5);
-    }
-    .result-action-btn.save-btn {
-      background: rgba(74, 222, 128, 0.3);
-      border-color: rgba(74, 222, 128, 0.5);
-      color: #86efac;
-    }
-    .result-action-btn.save-btn:hover {
-      background: rgba(74, 222, 128, 0.5);
-    }
-
-    /* ── CROP ── */
-    .toolbar-btn.crop-active {
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      border-color: #d97706;
-      color: #000;
-      font-weight: 600;
-    }
-
-    .crop-overlay {
-      position: absolute;
-      inset: 0;
-      z-index: 10;
-      cursor: crosshair;
-    }
-
-    .crop-selection {
-      position: absolute;
-      border: 2px dashed #4ade80;
-      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-      cursor: move;
-    }
-
-    .crop-handle {
-      position: absolute;
-      width: 12px;
-      height: 12px;
-      background: #4ade80;
-      border: 1px solid rgba(0, 0, 0, 0.4);
-      border-radius: 2px;
-    }
-    .crop-handle-nw { top: -6px; left: -6px; cursor: nw-resize; }
-    .crop-handle-ne { top: -6px; right: -6px; cursor: ne-resize; }
-    .crop-handle-sw { bottom: -6px; left: -6px; cursor: sw-resize; }
-    .crop-handle-se { bottom: -6px; right: -6px; cursor: se-resize; }
-
-    .crop-actions-bar {
-      position: absolute;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-      z-index: 12;
-    }
-  </style>
-</head>
-<body>
-  <div class="app">
-
-    <!-- TOOLBAR -->
-    <div class="toolbar">
-      <button class="toolbar-btn upload-btn" id="uploadBtn">Upload</button>
-      <input type="file" id="imageInput" accept="image/*" style="display:none">
-      <button class="toolbar-btn" id="cropBtn" onclick="toggleCropMode()">Crop</button>
-
-      <div class="toolbar-divider"></div>
-
-      <div class="toolbar-effects" id="effectGrid"></div>
-
-      <div class="toolbar-divider"></div>
-
-      <span class="presets-label">Presets</span>
-      <div class="preset-chips" id="presetChips"></div>
-      <button class="save-preset-btn" id="savePresetBtn" disabled>+ Save</button>
-
-      <div class="toolbar-divider"></div>
-
-      <div class="toolbar-status">
-        <div class="status" id="status"></div>
-      </div>
-    </div>
-
-    <div class="toolbar-sub" id="clientPreviewBar">
-      <span class="toolbar-sub-label">P5 preview</span>
-      <label class="toolbar-opt" title="Nearest-neighbor: crisp pixels when scaling, remapping, and cropping (no soft anti-aliasing blur)">
-        <input type="checkbox" id="sharpPixels">
-        Sharp pixels
-      </label>
-      <select class="toolbar-select" id="maxPreviewPx" title="Max width/height for client preview (larger keeps more detail; slower)">
-        <option value="600">Preview 600px</option>
-        <option value="1600">Preview 1600px</option>
-        <option value="0">Full (cap 8k)</option>
-      </select>
-      <span style="color:rgba(255,255,255,0.35);font-size:0.8em;">Processing runs in your browser; use Save/Download for a file.</span>
-    </div>
-
-    <!-- MAIN AREA -->
-    <div class="main-area">
-      <div class="history-strip source-strip" id="sourceHistoryStrip">
-        <span class="strip-label">Sources</span>
-      </div>
-
-      <div class="image-panel" id="sourcePanel">
-        <span class="panel-label">Source</span>
-        <div class="no-image-msg">Upload or drag an image</div>
-      </div>
-
-      <div class="image-panel" id="resultPanel">
-        <span class="panel-label">Result</span>
-        <div class="no-image-msg" id="resultPlaceholder">Select an effect</div>
-        <div id="resultCanvas"></div>
-        <div class="result-actions" id="resultActions" style="display:none">
-          <button class="result-action-btn save-btn" onclick="saveResult()">Save</button>
-          <button class="result-action-btn" onclick="downloadResult()">Download</button>
-        </div>
-      </div>
-
-      <div class="history-strip result-strip" id="resultHistoryStrip">
-        <span class="strip-label">Results</span>
-      </div>
-    </div>
-
-    <!-- PARAM POPOVER -->
-    <div class="param-popover" id="paramPopover"></div>
-
-    <!-- DROP OVERLAY -->
-    <div class="drop-overlay" id="dropOverlay">
-      <div class="drop-overlay-text">Drop image to upload</div>
-    </div>
-
-  </div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
-  <script src="/js/effects.js"></script>
-  <script src="/js/p5-canvas.js"></script>
-
-  <script>
-    // ── STATE ──
-    let selectedEffect = null;
-    let uploadedImagePath = null;
-    let currentSourcePath = null;
-    let currentSourceType = null;
-    let currentSourceDataURI = null;
-    let activeSourceId = null;
-    let currentResultPath = null;
-    let sourceHistory = [];
-    let resultHistory = [];
-    /** Normalized 0–1 point on source image: kaleidoscope sampling center (client P5 only) */
-    let kaleidoscopeCenter = { x: 0.5, y: 0.5 };
-
-    function syncKaleidoscopeMarker() {
-      const panel = document.getElementById('sourcePanel');
-      const marker = document.getElementById('kaleidoscopeCenterMarker');
-      const img = panel?.querySelector('.source-img');
-      const cropping = document.getElementById('cropBtn')?.classList.contains('crop-active');
-      if (!panel || !marker || !img) {
-        panel?.classList.remove('source-panel--kaleidoscope');
-        panel?.removeAttribute('title');
-        return;
-      }
-      const k = selectedEffect?.id === 'kaleidoscope';
-      panel.classList.toggle('source-panel--kaleidoscope', k && !cropping);
-      if (!k || cropping) {
-        marker.hidden = true;
-        panel.title = '';
-        return;
-      }
-      marker.hidden = false;
-      marker.style.left = (kaleidoscopeCenter.x * 100) + '%';
-      marker.style.top = (kaleidoscopeCenter.y * 100) + '%';
-      panel.title = 'Click to set kaleidoscope sampling center';
-    }
+    /** Filled after /api/effects loads — used by Try demo */
+    const effectsById = {};
 
     // ── INIT ──
     fetch('/api/effects')
@@ -746,6 +46,7 @@
       .then(data => {
         const grid = document.getElementById('effectGrid');
         data.effects.forEach(effect => {
+          effectsById[effect.id] = effect;
           const btn = document.createElement('button');
           btn.className = 'effect-btn';
           btn.textContent = effect.name;
@@ -918,6 +219,10 @@
 
       if (Object.keys(effect.params).length > 0) {
         Object.entries(effect.params).forEach(([key, paramDef]) => {
+          if (effect.id === 'blend' && (key === 'blendMode' || key === 'opacity')) {
+            return;
+          }
+
           const group = document.createElement('div');
           group.className = 'param-group';
 
@@ -996,6 +301,47 @@
 
       updateSavePresetBtn();
       syncKaleidoscopeMarker();
+      if (effect.id === 'blend') {
+        syncBlendBar(overrideParams);
+      }
+      syncContextualSubbars();
+    }
+
+    function syncContextualSubbars() {
+      const blendBar = document.getElementById('blendLayerBar');
+      const previewBar = document.getElementById('clientPreviewBar');
+      const id = selectedEffect?.id;
+      if (blendBar) blendBar.hidden = id !== 'blend';
+      if (previewBar) previewBar.hidden = id !== 'sharpen';
+    }
+
+    function syncBlendBar(overrideParams) {
+      const modeEl = document.getElementById('blendModeBar');
+      const opEl = document.getElementById('blendOpacityBar');
+      const opVal = document.getElementById('blendOpacityValue');
+      if (!modeEl || !opEl) return;
+      let mode = 'multiply';
+      let op = 0.85;
+      if (overrideParams) {
+        if (overrideParams.blendMode != null) {
+          mode = String(overrideParams.blendMode).replace(/-/g, '_');
+        }
+        if (overrideParams.opacity != null) {
+          const o = parseFloat(String(overrideParams.opacity).replace(/%$/, ''));
+          if (!Number.isNaN(o)) op = Math.min(1, Math.max(0, o));
+        }
+      }
+      if (![...modeEl.options].some((o) => o.value === mode)) mode = 'multiply';
+      modeEl.value = mode;
+      opEl.value = String(op);
+      if (opVal) opVal.textContent = String(Math.round(op * 100) / 100);
+    }
+
+    function reprocessBlendIfReady() {
+      const hasSource = uploadedImagePath || (currentSourceType === 'generated' && currentSourcePath);
+      if (hasSource && selectedEffect && selectedEffect.id === 'blend' && window.resultP5 && window.resultP5.hasBlendImage()) {
+        processImage();
+      }
     }
 
     function selectEffect(effect, btnEl) {
@@ -1009,7 +355,7 @@
       }
 
       const popover = document.getElementById('paramPopover');
-      if (Object.keys(effect.params).length > 0 && btnEl) {
+      if (popover.children.length > 0 && btnEl) {
         positionPopover(btnEl);
         popover.classList.add('visible');
       } else {
@@ -1018,7 +364,11 @@
 
       const hasSource = uploadedImagePath || (currentSourceType === 'generated' && currentSourcePath);
       if (hasSource && selectedEffect) {
-        processImage();
+        if (selectedEffect.id === 'blend' && window.resultP5 && !window.resultP5.hasBlendImage()) {
+          /* wait until user picks a blend layer */
+        } else {
+          processImage();
+        }
       }
     }
 
@@ -1063,12 +413,28 @@
         params.centerX = String(kaleidoscopeCenter.x);
         params.centerY = String(kaleidoscopeCenter.y);
       }
+      if (selectedEffect && selectedEffect.id === 'blend') {
+        const modeEl = document.getElementById('blendModeBar');
+        const opEl = document.getElementById('blendOpacityBar');
+        if (modeEl) params.blendMode = modeEl.value;
+        if (opEl) params.opacity = opEl.value;
+      }
       return params;
+    }
+
+    function updateBlendStatus() {
+      const el = document.getElementById('blendImageStatus');
+      if (!el || !window.resultP5) return;
+      el.textContent = window.resultP5.hasBlendImage() ? 'Ready' : 'None';
     }
 
     // ── PROCESS (client-side via p5.js) ──
     function processImage() {
       if (!window.resultP5 || !selectedEffect) return;
+      if (selectedEffect.id === 'blend' && !window.resultP5.hasBlendImage()) {
+        showStatus('Choose a blend image (Blend layer bar)', 'error');
+        return;
+      }
       const params = collectParamValues();
       showStatus('<span class="loading-spinner"></span>Processing…', 'loading');
       setTimeout(() => {
@@ -1239,6 +605,9 @@
         populateEffect(effect, preset.params);
         const hasSource = uploadedImagePath || (currentSourceType === 'generated' && currentSourcePath);
         if (hasSource) {
+          if (effect.id === 'blend' && window.resultP5 && !window.resultP5.hasBlendImage()) {
+            return;
+          }
           processImage();
         }
       }
@@ -1330,6 +699,114 @@
     }
 
     initClientPixelControls();
+
+    document.getElementById('blendImagePickBtn').onclick = () => document.getElementById('blendImageInput').click();
+    document.getElementById('blendImageInput').onchange = (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f || !f.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        try {
+          await window.resultP5.loadBlendImage(ev.target.result);
+          updateBlendStatus();
+          if (selectedEffect && selectedEffect.id === 'blend') processImage();
+        } catch (_) {
+          showStatus('Could not load blend image', 'error');
+        }
+      };
+      reader.readAsDataURL(f);
+      e.target.value = '';
+    };
+    document.getElementById('blendUseResultBtn').onclick = async () => {
+      if (!currentResultPath) {
+        showStatus('Pick a result in the strip (or save one) first', 'error');
+        return;
+      }
+      try {
+        await window.resultP5.loadBlendImage(currentResultPath);
+        updateBlendStatus();
+        if (selectedEffect && selectedEffect.id === 'blend') processImage();
+      } catch (_) {
+        showStatus('Could not load result as blend layer', 'error');
+      }
+    };
+    document.getElementById('blendClearBtn').onclick = () => {
+      if (!window.resultP5) return;
+      window.resultP5.clearBlendImage();
+      updateBlendStatus();
+      if (selectedEffect && selectedEffect.id === 'blend') {
+        showStatus('Blend layer cleared', 'success');
+      }
+    };
+
+    updateBlendStatus();
+
+    document.getElementById('blendTryDemoBtn').onclick = async () => {
+      if (!window.resultP5) {
+        showStatus('Page still loading — try again in a second', 'error');
+        return;
+      }
+      const blendEff = effectsById['blend'];
+      const blendBtn = [...document.querySelectorAll('#effectGrid .effect-btn')].find((b) => b.textContent === 'Blend');
+      if (!blendEff || !blendBtn) {
+        showStatus('No Blend button: stop the server and run npm start again (see “How to use Blend”).', 'error');
+        return;
+      }
+
+      function solidDataUrl(r, g, b) {
+        const c = document.createElement('canvas');
+        c.width = 128;
+        c.height = 128;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(0, 0, 128, 128);
+        return c.toDataURL('image/png');
+      }
+
+      const baseData = solidDataUrl(210, 50, 50);
+      const topData = solidDataUrl(50, 100, 230);
+
+      currentSourceType = 'upload';
+      currentSourcePath = null;
+      uploadedImagePath = 'uploaded';
+      currentSourceDataURI = baseData;
+      document.getElementById('imageInput').value = '';
+
+      try {
+        updateSourcePreview(baseData, 'upload');
+        addToSourceHistory(baseData, 'upload');
+        await window.resultP5.loadSourceImage(baseData);
+        await window.resultP5.loadBlendImage(topData);
+      } catch (_) {
+        showStatus('Demo failed to load images', 'error');
+        return;
+      }
+
+      updateBlendStatus();
+      updateSavePresetBtn();
+
+      selectEffect(blendEff, blendBtn);
+
+      const modeEl = document.getElementById('blendModeBar');
+      const opEl = document.getElementById('blendOpacityBar');
+      const opVal = document.getElementById('blendOpacityValue');
+      if (modeEl) modeEl.value = 'screen';
+      if (opEl) {
+        opEl.value = '0.9';
+        if (opVal) opVal.textContent = '0.9';
+      }
+      processImage();
+      showStatus('Demo: red base + blue blend layer, Screen mode — tweak Mode/Opacity here', 'success');
+    };
+
+    document.getElementById('blendModeBar').addEventListener('change', reprocessBlendIfReady);
+    const blendOpBar = document.getElementById('blendOpacityBar');
+    const blendOpVal = document.getElementById('blendOpacityValue');
+    blendOpBar.addEventListener('input', () => {
+      blendOpVal.textContent = String(Math.round(parseFloat(blendOpBar.value) * 100) / 100);
+      clearTimeout(blendOpBar._debounce);
+      blendOpBar._debounce = setTimeout(reprocessBlendIfReady, 120);
+    });
 
     document.addEventListener('keydown', (e) => {
       if (e.target.closest('input, textarea, select')) return;
@@ -1524,7 +1001,10 @@
       showStatus('Image cropped', 'success');
     }
 
-    function cancelCrop() { exitCropMode(); }
-  </script>
-</body>
-</html>
+function cancelCrop() { exitCropMode(); }
+
+window.toggleCropMode = toggleCropMode;
+window.saveResult = saveResult;
+window.downloadResult = downloadResult;
+window.applyCrop = applyCrop;
+window.cancelCrop = cancelCrop;

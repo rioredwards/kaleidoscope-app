@@ -306,15 +306,112 @@ function applySharpen(p, img, params) {
   return out;
 }
 
+// ── Blend (two layers: base = source, top = second image) ────────────────────
+
+function clamp01ch(x) {
+  return Math.max(0, Math.min(1, x));
+}
+
+function blendChannel(Cb, Cs, mode) {
+  const B = clamp01ch(Cb);
+  const S = clamp01ch(Cs);
+  switch (mode) {
+    case 'multiply':
+      return B * S;
+    case 'screen':
+      return 1 - (1 - B) * (1 - S);
+    case 'overlay':
+      return S < 0.5 ? 2 * B * S : 1 - 2 * (1 - B) * (1 - S);
+    case 'darken':
+      return Math.min(B, S);
+    case 'lighten':
+      return Math.max(B, S);
+    case 'hard_light':
+      if (S <= 0.5) return 2 * B * S;
+      return 1 - (1 - B) * (2 * S - 1);
+    case 'soft_light':
+      if (S <= 0.5) return B - (1 - 2 * S) * B * (1 - B);
+      return B + (2 * S - 1) * (Math.sqrt(B) - B);
+    case 'difference':
+      return Math.abs(B - S);
+    case 'exclusion':
+      return B + S - 2 * B * S;
+    case 'color_dodge':
+      if (S >= 1) return 1;
+      if (S <= 0) return B;
+      return Math.min(1, B / (1 - S));
+    case 'color_burn':
+      if (S <= 0) return 0;
+      if (S >= 1) return 1;
+      return Math.max(0, 1 - (1 - B) / S);
+    default:
+      return B * S;
+  }
+}
+
+function applyBlend(p, base, params) {
+  const top = params._topImage;
+  if (!top) {
+    const c = p.createImage(base.width, base.height);
+    c.copy(base, 0, 0, base.width, base.height, 0, 0, base.width, base.height);
+    return c;
+  }
+
+  const mode = (params.blendMode || 'multiply').replace(/-/g, '_');
+  let opacity = parseFloat(params.opacity);
+  if (!Number.isFinite(opacity)) opacity = 0.85;
+  opacity = Math.max(0, Math.min(1, opacity));
+
+  const w = base.width;
+  const h = base.height;
+  const tw = top.width;
+  const th = top.height;
+
+  base.loadPixels();
+  top.loadPixels();
+  const out = p.createImage(w, h);
+  out.loadPixels();
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const u = ((x + 0.5) / w) * tw;
+      const v = ((y + 0.5) / h) * th;
+      const [tr, tg, tb, ta] = sampleRgba(top.pixels, tw, th, u, v);
+      const bi = (y * w + x) * 4;
+      const Br = base.pixels[bi] / 255;
+      const Bg = base.pixels[bi + 1] / 255;
+      const Bb = base.pixels[bi + 2] / 255;
+      const Sr = tr / 255;
+      const Sg = tg / 255;
+      const Sb = tb / 255;
+      const a = (ta / 255) * opacity;
+      const blendR = blendChannel(Br, Sr, mode);
+      const blendG = blendChannel(Bg, Sg, mode);
+      const blendB = blendChannel(Bb, Sb, mode);
+      const outR = blendR * a + Br * (1 - a);
+      const outG = blendG * a + Bg * (1 - a);
+      const outB = blendB * a + Bb * (1 - a);
+      out.pixels[bi] = Math.round(clamp01ch(outR) * 255);
+      out.pixels[bi + 1] = Math.round(clamp01ch(outG) * 255);
+      out.pixels[bi + 2] = Math.round(clamp01ch(outB) * 255);
+      out.pixels[bi + 3] = base.pixels[bi + 3];
+    }
+  }
+
+  out.updatePixels();
+  return out;
+}
+
 // ── Registry ──────────────────────────────────────────────────────────────────
 
-const EFFECTS = {
+export const EFFECTS = {
   kaleidoscope: applyKaleidoscope,
   mandala: applyMandala,
   edge_detect: applyEdgeDetect,
   high_contrast: applyHighContrast,
   barrel: applyBarrel,
   sharpen: applySharpen,
+  blend: applyBlend,
 };
 
 window.setPixelSamplingMode = setPixelSamplingMode;

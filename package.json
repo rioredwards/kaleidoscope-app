@@ -5,7 +5,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
+    "dev": "concurrently -k -n api,vite -c blue,green \"node server.js\" \"vite\"",
+    "dev:api": "node server.js",
+    "dev:vite": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "mcp": "node mcp-server.js"
   },
   "keywords": [
@@ -20,6 +24,11 @@
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "form-data": "^4.0.5",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "p5": "^1.11.3"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "vite": "^6.2.0"
   }
 }
