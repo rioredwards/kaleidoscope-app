@@ -1,7 +1,7 @@
 {
   "name": "kaleidoscope-app",
   "version": "1.0.0",
-  "description": "Interactive Kaleidoscope Generator",
+  "description": "Browser-based trippy image effects for album art and covers",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -14,7 +14,9 @@
   },
   "keywords": [
     "kaleidoscope",
-    "imagemagick"
+    "p5js",
+    "album-art",
+    "image-effects"
   ],
   "author": "",
   "license": "ISC",

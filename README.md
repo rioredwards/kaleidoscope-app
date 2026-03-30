@@ -1,121 +1,87 @@
-# Kaleidoscope Generator Web App
+# Kaleidoscope — trippy art for album covers
 
-An interactive web app for creating mesmerizing kaleidoscope effects from your images using ImageMagick.
+A small web app for turning photos into **symmetric, glitchy, high-color artwork** in the browser. It is built for **album art**, single covers, and social tiles: upload a source image, stack effects, then **download PNG** or save to disk through the local server.
+
+**Processing runs in your browser** with [p5.js](https://p5js.org/). You only need **Node.js** to run the dev server and optional save/preset APIs. **ImageMagick is not required** for the normal UI workflow.
 
 ## Setup
 
-1. Make sure you have Node.js and ImageMagick installed:
 ```bash
-# Check if installed
-node --version
-magick --version
-```
-
-2. Install dependencies:
-```bash
-cd ~/kaleidoscope-app
+node --version   # 18+ recommended
+cd kaleidoscope-app
 npm install
 ```
 
-3. Development (Vite HMR + API on port 3000):
+### Development (hot reload + API)
+
 ```bash
 npm run dev
 ```
-Open **http://localhost:5173** (Vite proxies `/api`, `/uploads`, `/outputs` to the API server).
 
-4. Production-style (built static files + API on one port):
+Open **http://localhost:5173**. Vite proxies `/api`, `/uploads`, and `/outputs` to the API on port **3000**.
+
+### Production-style (built UI + API on one port)
+
 ```bash
 npm run build
 npm start
 ```
-Open **http://localhost:3000**
 
-## Features
+Open **http://localhost:3000**.
 
-- **6-Fold Kaleidoscope**: Classic 6-way symmetric pattern
-- **8-Fold Kaleidoscope**: 8-way geometric symmetry
-- **12-Fold Kaleidoscope**: Maximum detail with 12-way symmetry
-- **Mandala**: 8-way rotational mirror effect
-- **Edge Detection**: Emphasize edges and details
-- **High Contrast**: Increase contrast dramatically
-- **Barrel Distortion**: Curved lens effect
-- **Sharpen**: Enhance details and edges
+## How to use
 
-## How to Use
+1. **Upload** or drag an image (or use a previous **result** as the new source).
+2. **Pick an effect** in the toolbar; the preview updates when you change parameters.
+3. Use **Sharp pixels** / **preview size** when you want crisp pixels or a larger preview (still capped for performance).
+4. **Download** for a PNG, or **Save** / **Save → source** to keep working on the server and chain effects.
+5. **Presets** store named effect + parameter combos for repeat looks.
 
-1. **Upload** an image by clicking the upload area or dragging a file
-2. **Select** an effect from the available options
-3. **Adjust** parameters if available for the effect
-4. Click **Generate Kaleidoscope** to process
-5. **Download** your result or try another effect
+Chaining is the secret sauce for cover art: e.g. **Kaleidoscope → Color adjust → Glitch → Tile**, re-using each result as source until it feels right.
 
-## Understanding the Effects
+## What you can do
 
-### Kaleidoscope Effects (6/8/12-fold)
-These use ImageMagick's DePolar, crop, flip, and Polar distortions to create traditional kaleidoscope patterns. The fold number determines how many repeating sections appear.
+| Kind             | Effects (examples)                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| Symmetry         | **Kaleidoscope** (folds + crop), **Mandala**                                        |
+| Color            | **Invert**, **Color adjust** (contrast, saturation, hue), **High contrast**         |
+| Warp             | **Barrel**, **Wave warp**                                                           |
+| Glitch / texture | **Glitch**, **Chromatic aberration**, **Noise burst**, **Edge detect**, **Sharpen** |
+| Layout / layers  | **Tile** (repeat grid), **Blend** (second image + modes)                            |
 
-### Mandala
-Creates a mandala-like effect by rotating the image 8 times and blending them together using screen composition.
+Parameters are in the popover next to each effect (and the blend row when **Blend** is selected).
 
-### Edge Detection & Contrast
-Emphasizes the geometric details and structure by detecting edges and increasing contrast.
-
-## Advanced: Adding New Effects
-
-To add a new effect, edit `server.js` in the `/api/process` route:
-
-```javascript
-case 'my_effect':
-  command = `-your -imagemagick -commands -here`;
-  break;
-```
-
-Then add it to the effects list returned by `/api/effects`.
-
-## ImageMagick Commands Reference
-
-The app builds ImageMagick commands dynamically. Common operations:
-
-```
--distort DePolar [radius]     # Convert to polar coordinates
--distort Polar [radius]       # Convert from polar coordinates
--edge [radius]                # Edge detection
--sharpen [kernel]             # Sharpen image
--contrast-stretch             # Auto-contrast
--sigmoidal-contrast           # S-curve contrast
--distort Barrel               # Barrel distortion
-```
-
-## Troubleshooting
-
-**"ImageMagick error" when processing:**
-- Make sure ImageMagick is installed: `brew install imagemagick`
-- Check that the image format is supported (JPG, PNG)
-
-**Port already in use:**
-- Edit the `port` variable in server.js to use a different port (e.g., 3001)
-
-**Out of memory:**
-- For very large images, ImageMagick might need more resources
-- Try with a smaller input image
-
-## File Structure
+## Project layout
 
 ```
 kaleidoscope-app/
-├── server.js              # Express server & ImageMagick API
-├── public/
-│   └── index.html         # Web UI
-├── uploads/               # (Created) Uploaded images
-├── outputs/               # (Created) Generated results
-└── package.json
+├── index.html              # Shell + toolbar
+├── src/
+│   ├── main.js             # UI, presets, history, crop
+│   ├── effects.js          # All image effects (client-side)
+│   ├── p5-canvas.js        # p5 instance, preview scaling, export
+│   └── style.css
+├── server.js               # Express: static files, /api/effects, presets, save-canvas
+├── vite.config.js
+├── uploads/                # Created when using upload APIs
+└── outputs/                # Saved results (PNG)
 ```
 
-## Tips
+## Adding or changing effects
 
-- Start with smaller images (800x800 or less) for faster processing
-- The results are saved and you can download them
-- Experiment with different parameter values for the same effect
-- Combine effects by using the output of one as input to another
+1. Implement the effect in **`src/effects.js`** and register it on the **`EFFECTS`** object.
+2. Add the same `id`, display name, and **`params`** schema to **`/api/effects`** in **`server.js`** so the toolbar and presets stay in sync.
 
-Enjoy creating! ✨
+## Troubleshooting
+
+- **Slow or heavy preview:** Lower **Preview** resolution in the sub-toolbar, or start from a smaller source image.
+- **Port in use:** Change `port` in `server.js` (and match Vite’s proxy in `vite.config.js` if you use `npm run dev`).
+- **Blend says “Choose a blend image”:** Pick a top layer with **Choose image** or **Use result** in the blend bar.
+
+## Optional: MCP and `/api/process`
+
+The repo includes an **`mcp-server.js`** helper that can call **`POST /api/process`**, which still builds **ImageMagick** command lines in **`server.js`**. That path is separate from the main web UI; ignore it unless you are wiring automation and have `magick` installed.
+
+---
+
+Have fun making weird, loud cover art.
