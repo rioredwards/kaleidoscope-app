@@ -402,6 +402,350 @@ function applyBlend(p, base, params) {
   return out;
 }
 
+// ── Seeded PRNG (stable presets / reproducible glitch) ────────────────────────
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a += 0x6d2b79f5;
+    let t = Math.imul(a ^ (a >>> 15), a | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashSeed(s) {
+  if (s == null || s === '') return 1337;
+  if (typeof s === 'number' && Number.isFinite(s)) return (Math.floor(s) >>> 0) || 1;
+  const str = String(s).trim();
+  const asNum = Number(str);
+  if (str !== '' && Number.isFinite(asNum) && String(asNum) === str) {
+    return (Math.floor(asNum) >>> 0) || 1;
+  }
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+// ── Invert ───────────────────────────────────────────────────────────────────
+
+function applyInvert(p, img, params) {
+  const t = parseFloat(params.strength);
+  const strength = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : 1;
+  const w = img.width;
+  const h = img.height;
+  const out = p.createImage(w, h);
+  img.loadPixels();
+  out.loadPixels();
+  for (let i = 0; i < img.pixels.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      const v = img.pixels[i + c];
+      out.pixels[i + c] = Math.round(v + strength * (255 - 2 * v));
+    }
+    out.pixels[i + 3] = img.pixels[i + 3];
+  }
+  out.updatePixels();
+  return out;
+}
+
+// ── Tile (repeat image in a grid — output is larger) ────────────────────────
+
+function applyTile(p, img, params) {
+  const maxOut = 8192;
+  let cols = Math.max(1, Math.min(12, parseInt(params.columns, 10) || 4));
+  let rows = Math.max(1, Math.min(12, parseInt(params.rows, 10) || 4));
+  const w = img.width;
+  const h = img.height;
+  cols = Math.min(cols, Math.max(1, Math.floor(maxOut / w)));
+  rows = Math.min(rows, Math.max(1, Math.floor(maxOut / h)));
+  const ow = w * cols;
+  const oh = h * rows;
+  const out = p.createImage(ow, oh);
+  img.loadPixels();
+  out.loadPixels();
+  for (let oy = 0; oy < oh; oy++) {
+    for (let ox = 0; ox < ow; ox++) {
+      const sx = ox % w;
+      const sy = oy % h;
+      const si = (sy * w + sx) * 4;
+      const di = (oy * ow + ox) * 4;
+      out.pixels[di] = img.pixels[si];
+      out.pixels[di + 1] = img.pixels[si + 1];
+      out.pixels[di + 2] = img.pixels[si + 2];
+      out.pixels[di + 3] = img.pixels[si + 3];
+    }
+  }
+  out.updatePixels();
+  return out;
+}
+
+// ── Glitch (horizontal slice shifts + RGB split + optional scanlines) ────────
+
+function applyGlitch(p, img, params) {
+  const intensity = Math.max(0, Math.min(100, parseFloat(params.intensity) || 55));
+  const numSlices = Math.max(4, Math.min(64, parseInt(params.slices, 10) || 16));
+  const rgbSplit = Math.max(0, Math.min(40, parseFloat(params.rgbSplit) || 6));
+  const scan = Math.max(0, Math.min(100, parseFloat(params.scanlines) || 0));
+  const seed = hashSeed(params.seed != null ? params.seed : 'glitch');
+  const rand = mulberry32(seed);
+  const w = img.width;
+  const h = img.height;
+  const out = p.createImage(w, h);
+  img.loadPixels();
+  out.loadPixels();
+
+  const maxShift = Math.max(1, Math.floor((intensity / 100) * Math.min(w, h) * 0.22));
+  const sliceH = h / numSlices;
+  const offsets = new Int32Array(numSlices);
+  for (let i = 0; i < numSlices; i++) {
+    offsets[i] = Math.floor((rand() * 2 - 1) * maxShift);
+  }
+
+  for (let y = 0; y < h; y++) {
+    const si = Math.min(numSlices - 1, Math.floor(y / sliceH));
+    const dx = offsets[si];
+    const scanDim =
+      scan > 0 && (y & 1) === 0 ? 1 - scan / 200 : 1;
+
+    for (let x = 0; x < w; x++) {
+      const idx = (y * w + x) * 4;
+      const xr = x + dx + rgbSplit;
+      const xg = x + dx;
+      const xb = x + dx - rgbSplit;
+      const [r0, , , a0] = sampleRgba(img.pixels, w, h, xr, y);
+      const [, g1, ,] = sampleRgba(img.pixels, w, h, xg, y);
+      const [, , b2,] = sampleRgba(img.pixels, w, h, xb, y);
+
+      out.pixels[idx] = Math.round(r0 * scanDim);
+      out.pixels[idx + 1] = Math.round(g1 * scanDim);
+      out.pixels[idx + 2] = Math.round(b2 * scanDim);
+      out.pixels[idx + 3] = a0;
+    }
+  }
+
+  out.updatePixels();
+  return out;
+}
+
+// ── Wave warp (trippy UV displacement) ───────────────────────────────────────
+
+function applyWaveWarp(p, img, params) {
+  const amp = Math.max(0, Math.min(80, parseFloat(params.amplitude) || 14));
+  const f = Math.max(0.005, Math.min(1.2, parseFloat(params.frequency) || 0.12));
+  const swirl = Math.max(0, Math.min(1, parseFloat(params.swirl) || 0.35));
+  const w = img.width;
+  const h = img.height;
+  const out = p.createImage(w, h);
+  img.loadPixels();
+  out.loadPixels();
+  const cx = w / 2;
+  const cy = h / 2;
+  const m = Math.max(1, Math.max(w, h));
+  /** Phase per pixel so `f` ≈ waves across the image (not radians/px). */
+  const k = (2 * Math.PI * f) / m;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = (y * w + x) * 4;
+      const nx = (x - cx) / m;
+      const ny = (y - cy) / m;
+      let sx =
+        x +
+        amp * Math.sin(y * k * 0.45) +
+        amp * 0.6 * Math.cos(x * k * 0.38 + y * k * 0.2);
+      let sy =
+        y +
+        amp * Math.cos(x * k * 0.42) +
+        amp * 0.55 * Math.sin(y * k * 0.36 + x * k * 0.18);
+      sx += swirl * amp * (-ny) * Math.sin(nx * 6 + ny * 6);
+      sy += swirl * amp * nx * Math.cos(nx * 6 - ny * 6);
+
+      const [rv, gv, bv, av] = sampleRgba(img.pixels, w, h, sx, sy);
+      out.pixels[idx] = rv;
+      out.pixels[idx + 1] = gv;
+      out.pixels[idx + 2] = bv;
+      out.pixels[idx + 3] = av;
+    }
+  }
+
+  out.updatePixels();
+  return out;
+}
+
+// ── Noise burst (digital grain / chaos) ───────────────────────────────────────
+
+function applyNoiseBurst(p, img, params) {
+  const amount = Math.max(0, Math.min(100, parseFloat(params.amount) || 35));
+  const seed = hashSeed(params.seed != null ? params.seed : 'noise');
+  const rand = mulberry32(seed);
+  const cn = params.colorNoise;
+  const colorNoise =
+    cn === 'color' || cn === 'true' || cn === true || cn === '1' ? 1 : 0;
+  const w = img.width;
+  const h = img.height;
+  const out = p.createImage(w, h);
+  img.loadPixels();
+  out.loadPixels();
+  const a = amount / 100;
+
+  for (let i = 0; i < img.pixels.length; i += 4) {
+    const n = rand();
+    const m = (n - 0.5) * 2 * 255 * a;
+    if (colorNoise > 0) {
+      out.pixels[i] = Math.max(0, Math.min(255, Math.round(img.pixels[i] + m * rand())));
+      out.pixels[i + 1] = Math.max(0, Math.min(255, Math.round(img.pixels[i + 1] + m * rand())));
+      out.pixels[i + 2] = Math.max(0, Math.min(255, Math.round(img.pixels[i + 2] + m * rand())));
+    } else {
+      const g = m * 0.9;
+      out.pixels[i] = Math.max(0, Math.min(255, Math.round(img.pixels[i] + g)));
+      out.pixels[i + 1] = Math.max(0, Math.min(255, Math.round(img.pixels[i + 1] + g)));
+      out.pixels[i + 2] = Math.max(0, Math.min(255, Math.round(img.pixels[i + 2] + g)));
+    }
+    out.pixels[i + 3] = img.pixels[i + 3];
+  }
+
+  out.updatePixels();
+  return out;
+}
+
+// ── RGB ↔ HSL + linear contrast (color adjust) ─────────────────────────────
+
+function hue2rgb(p, q, t) {
+  if (t < 0) t += 1;
+  if (t > 1) t -= 1;
+  if (t < 1 / 6) return p + (q - p) * 6 * t;
+  if (t < 1 / 2) return q;
+  if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+  return p;
+}
+
+function rgbToHsl(r, g, b) {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0;
+  let s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r:
+        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        break;
+      case g:
+        h = ((b - r) / d + 2) / 6;
+        break;
+      default:
+        h = ((r - g) / d + 4) / 6;
+        break;
+    }
+  }
+  return [h * 360, s, l];
+}
+
+function hslToRgb(hDeg, s, l) {
+  const h = (((hDeg % 360) + 360) % 360) / 360;
+  let r;
+  let g;
+  let b;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  return [r * 255, g * 255, b * 255];
+}
+
+function linearContrastByte(v, factor) {
+  const x = v / 255;
+  const y = (x - 0.5) * factor + 0.5;
+  return Math.max(0, Math.min(255, Math.round(y * 255)));
+}
+
+/** Hue shift + saturation in HSL, additive brightness on RGB, then per-channel contrast. */
+function applyColorAdjust(p, img, params) {
+  let contrast = parseFloat(params.contrast);
+  if (!Number.isFinite(contrast)) contrast = 1;
+  contrast = Math.max(0.05, Math.min(3, contrast));
+
+  let saturation = parseFloat(params.saturation);
+  if (!Number.isFinite(saturation)) saturation = 1;
+  saturation = Math.max(0, Math.min(3, saturation));
+
+  let brightness = parseFloat(params.brightness);
+  if (!Number.isFinite(brightness)) brightness = 0;
+  brightness = Math.max(-100, Math.min(100, brightness));
+
+  const hueRaw = params.hueShift ?? params.hue;
+  let deltaDeg = parseFloat(String(hueRaw ?? '').replace(/°\s*$/, ''));
+  if (!Number.isFinite(deltaDeg)) deltaDeg = 0;
+
+  const w = img.width;
+  const h = img.height;
+  const out = p.createImage(w, h);
+  img.loadPixels();
+  out.loadPixels();
+
+  for (let i = 0; i < img.pixels.length; i += 4) {
+    const a = img.pixels[i + 3];
+    let [H, S, L] = rgbToHsl(img.pixels[i], img.pixels[i + 1], img.pixels[i + 2]);
+    H = ((H + deltaDeg) % 360 + 360) % 360;
+    S = Math.max(0, Math.min(1, S * saturation));
+    let [r, g, b] = hslToRgb(H, S, L);
+    r = Math.max(0, Math.min(255, r + brightness));
+    g = Math.max(0, Math.min(255, g + brightness));
+    b = Math.max(0, Math.min(255, b + brightness));
+    out.pixels[i] = linearContrastByte(r, contrast);
+    out.pixels[i + 1] = linearContrastByte(g, contrast);
+    out.pixels[i + 2] = linearContrastByte(b, contrast);
+    out.pixels[i + 3] = a;
+  }
+
+  out.updatePixels();
+  return out;
+}
+
+// ── Chromatic aberration (directional RGB separation) ────────────────────────
+
+function applyChromatic(p, img, params) {
+  const offset = Math.max(1, Math.min(35, parseFloat(params.offset) || 8));
+  const angle = parseFloat(params.angle);
+  const rad = Number.isFinite(angle) ? (angle * Math.PI) / 180 : 0;
+  const dx = Math.cos(rad) * offset;
+  const dy = Math.sin(rad) * offset;
+  const w = img.width;
+  const h = img.height;
+  const out = p.createImage(w, h);
+  img.loadPixels();
+  out.loadPixels();
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = (y * w + x) * 4;
+      const [r] = sampleRgba(img.pixels, w, h, x - dx, y - dy);
+      const [, g, , a0] = sampleRgba(img.pixels, w, h, x, y);
+      const [, , b] = sampleRgba(img.pixels, w, h, x + dx, y + dy);
+      out.pixels[idx] = r;
+      out.pixels[idx + 1] = g;
+      out.pixels[idx + 2] = b;
+      out.pixels[idx + 3] = a0;
+    }
+  }
+
+  out.updatePixels();
+  return out;
+}
+
 // ── Registry ──────────────────────────────────────────────────────────────────
 
 export const EFFECTS = {
@@ -412,6 +756,13 @@ export const EFFECTS = {
   barrel: applyBarrel,
   sharpen: applySharpen,
   blend: applyBlend,
+  invert: applyInvert,
+  tile: applyTile,
+  glitch: applyGlitch,
+  wave_warp: applyWaveWarp,
+  noise_burst: applyNoiseBurst,
+  chromatic: applyChromatic,
+  color_adjust: applyColorAdjust,
 };
 
 window.setPixelSamplingMode = setPixelSamplingMode;
