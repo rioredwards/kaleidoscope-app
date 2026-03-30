@@ -8,26 +8,29 @@
 <body>
   <div class="app">
 
+    <header class="app-header" id="appHeader">
     <!-- TOOLBAR -->
     <div class="toolbar">
-      <button class="toolbar-btn upload-btn" id="uploadBtn">Upload</button>
-      <input type="file" id="imageInput" accept="image/*" style="display:none">
-      <button class="toolbar-btn" id="cropBtn" onclick="toggleCropMode()">Crop</button>
+      <span class="toolbar-group-label" id="toolbarImageLabel">Image</span>
+      <button type="button" class="toolbar-btn upload-btn" id="uploadBtn" aria-controls="imageInput" aria-label="Upload image">Upload</button>
+      <input type="file" id="imageInput" accept="image/*" style="display:none" aria-hidden="true" tabindex="-1">
+      <button type="button" class="toolbar-btn" id="cropBtn" onclick="toggleCropMode()" aria-pressed="false" aria-label="Crop source image">Crop</button>
 
-      <div class="toolbar-divider"></div>
+      <div class="toolbar-divider" role="separator" aria-hidden="true"></div>
 
+      <span class="toolbar-group-label" id="toolbarEffectsLabel">Effects</span>
       <div class="toolbar-effects" id="effectGrid"></div>
 
-      <div class="toolbar-divider"></div>
+      <div class="toolbar-divider" role="separator" aria-hidden="true"></div>
 
-      <span class="presets-label">Presets</span>
+      <span class="presets-label" id="toolbarPresetsLabel">Presets</span>
       <div class="preset-chips" id="presetChips"></div>
-      <button class="save-preset-btn" id="savePresetBtn" disabled>+ Save</button>
+      <button type="button" class="save-preset-btn" id="savePresetBtn" disabled>+ Save</button>
 
-      <div class="toolbar-divider"></div>
+      <div class="toolbar-divider" role="separator" aria-hidden="true"></div>
 
       <div class="toolbar-status">
-        <div class="status" id="status"></div>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
       </div>
     </div>
 
@@ -51,12 +54,15 @@
       <details class="blend-help-details">
         <summary>How to use Blend</summary>
         <ol class="blend-help-list">
-          <li>Use <strong><code>npm run dev</code></strong> for hot reload; API runs on port 3000.</li>
-          <li>Set your main picture (Upload / Sources) — that is the <em>bottom</em> layer.</li>
-          <li>Here, choose <strong>Choose image</strong> or <strong>Use result</strong> — that is the <em>top</em> layer (status shows <strong>Ready</strong>).</li>
-          <li>This row appears only when <strong>Blend</strong> is selected in the effect bar above.</li>
-          <li>Change <strong>Mode</strong> and <strong>Opacity</strong> here; the result updates on the right.</li>
+          <li>Set your main image with <strong>Upload</strong> or the <strong>Sources</strong> strip — that is the <em>bottom</em> layer.</li>
+          <li>Use <strong>Choose image</strong> or <strong>Use result</strong> here for the <em>top</em> layer. Status shows <strong>Ready</strong> when the top layer is set.</li>
+          <li>This row appears when <strong>Blend</strong> is selected in the effects bar.</li>
+          <li>Adjust <strong>Mode</strong> and <strong>Opacity</strong>; the preview updates in the result panel.</li>
         </ol>
+        <details class="blend-help-dev">
+          <summary>Developer</summary>
+          <p class="blend-help-dev-text">Local dev: run <code>npm run dev</code> for hot reload; the API defaults to port 3000 (see README).</p>
+        </details>
       </details>
       <input type="file" id="blendImageInput" accept="image/*" style="display:none">
       <button type="button" class="toolbar-btn blend-btn" id="blendImagePickBtn">Choose image</button>
@@ -82,10 +88,11 @@
         <label>Opacity <input type="range" id="blendOpacityBar" min="0" max="1" step="0.05" value="0.85"><span class="blend-opacity-val" id="blendOpacityValue">0.85</span></label>
       </div>
     </div>
+    </header>
 
     <!-- MAIN AREA -->
-    <div class="main-area">
-      <div class="history-strip source-strip" id="sourceHistoryStrip">
+    <main class="main-area" id="mainArea">
+      <div class="history-strip source-strip" id="sourceHistoryStrip" title="Click a thumbnail to switch the active source image">
         <span class="strip-label">Sources</span>
       </div>
 
@@ -97,20 +104,22 @@
       <div class="image-panel" id="resultPanel">
         <span class="panel-label">Result</span>
         <div class="no-image-msg" id="resultPlaceholder">Select an effect</div>
+        <p class="blend-hint" id="blendHint" hidden role="note">Choose a top layer in the <strong>Blend layer</strong> bar above (Choose image or Use result).</p>
         <div id="resultCanvas"></div>
         <div class="result-actions" id="resultActions" style="display:none">
-          <button class="result-action-btn save-btn" onclick="saveResult()">Save</button>
-          <button class="result-action-btn" onclick="downloadResult()">Download</button>
+          <button type="button" class="result-action-btn save-btn" onclick="saveResult()" title="Save to disk (⌘S / Ctrl+S)">Save</button>
+          <button type="button" class="result-action-btn" onclick="saveResultAndUseAsSource()" title="Save and use as new source (⌘⇧S / Ctrl+Shift+S)">Save → source</button>
+          <button type="button" class="result-action-btn" onclick="downloadResult()" title="Download PNG (⌘D / Ctrl+D)">Download</button>
         </div>
       </div>
 
-      <div class="history-strip result-strip" id="resultHistoryStrip">
+      <div class="history-strip result-strip" id="resultHistoryStrip" title="Click a thumbnail to use that saved result as the new source">
         <span class="strip-label">Results</span>
       </div>
-    </div>
+    </main>
 
     <!-- PARAM POPOVER -->
-    <div class="param-popover" id="paramPopover"></div>
+    <div class="param-popover" id="paramPopover" role="dialog" aria-modal="false" aria-labelledby="paramPopoverTitle"></div>
 
     <!-- DROP OVERLAY -->
     <div class="drop-overlay" id="dropOverlay">

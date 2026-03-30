@@ -14,6 +14,72 @@ let resultHistory = [];
 /** Normalized 0–1 point on source image: kaleidoscope sampling center (client P5 only) */
 let kaleidoscopeCenter = { x: 0.5, y: 0.5 };
 
+const EFFECT_CATEGORY_ORDER = ['symmetry', 'color', 'warp', 'texture', 'layout'];
+const EFFECT_CATEGORY_LABELS = {
+  symmetry: 'Symmetry',
+  color: 'Color',
+  warp: 'Warp',
+  texture: 'Texture',
+  layout: 'Layout',
+  other: 'Other',
+};
+
+let popoverAnchorBtn = null;
+
+function getAppHeaderBottom() {
+  const el = document.getElementById('appHeader');
+  if (!el) return 52;
+  return el.getBoundingClientRect().bottom;
+}
+
+function positionPopover(btnEl) {
+  popoverAnchorBtn = btnEl;
+  const popover = document.getElementById('paramPopover');
+  const rect = btnEl.getBoundingClientRect();
+  const popWidth = 280;
+  const gap = 8;
+  let left = rect.left;
+  if (left + popWidth + 8 > window.innerWidth) {
+    left = Math.max(8, window.innerWidth - popWidth - 8);
+  }
+  const top = getAppHeaderBottom() + gap;
+  popover.style.top = `${top}px`;
+  popover.style.left = `${left}px`;
+  const avail = window.innerHeight - top - 16;
+  popover.style.maxHeight = `${Math.max(200, avail)}px`;
+}
+
+function updatePopoverPosition() {
+  const popover = document.getElementById('paramPopover');
+  if (!popover.classList.contains('visible') || !popoverAnchorBtn) return;
+  positionPopover(popoverAnchorBtn);
+}
+
+function hideParamPopover() {
+  const popover = document.getElementById('paramPopover');
+  popover.classList.remove('visible');
+  popoverAnchorBtn = null;
+  document.querySelectorAll('.effect-btn').forEach((btn) => {
+    btn.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function syncPopoverAriaExpanded() {
+  const popover = document.getElementById('paramPopover');
+  const open = popover.classList.contains('visible');
+  document.querySelectorAll('.effect-btn').forEach((btn) => {
+    const expanded = open && popoverAnchorBtn === btn;
+    btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  });
+}
+
+function syncBlendHint() {
+  const el = document.getElementById('blendHint');
+  if (!el || !window.resultP5) return;
+  const show = selectedEffect?.id === 'blend' && !window.resultP5.hasBlendImage();
+  el.hidden = !show;
+}
+
 function syncKaleidoscopeMarker() {
   const panel = document.getElementById('sourcePanel');
   const marker = document.getElementById('kaleidoscopeCenterMarker');
@@ -45,14 +111,70 @@ function syncKaleidoscopeMarker() {
       .then(r => r.json())
       .then(data => {
         const grid = document.getElementById('effectGrid');
-        data.effects.forEach(effect => {
+        grid.innerHTML = '';
+        const byCat = {};
+        data.effects.forEach((effect) => {
           effectsById[effect.id] = effect;
-          const btn = document.createElement('button');
-          btn.className = 'effect-btn';
-          btn.textContent = effect.name;
-          btn.onclick = (e) => selectEffect(effect, e.currentTarget);
-          grid.appendChild(btn);
+          const cat = effect.category || 'other';
+          if (!byCat[cat]) byCat[cat] = [];
+          byCat[cat].push(effect);
         });
+
+        function attachEffectButton(effect, container) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'effect-btn';
+          btn.dataset.effectId = effect.id;
+          btn.textContent = effect.name;
+          const paramCount = Object.keys(effect.params || {}).filter((key) => {
+            if (effect.id === 'blend' && (key === 'blendMode' || key === 'opacity')) return false;
+            return true;
+          }).length;
+          if (paramCount > 0) {
+            btn.title = `${effect.name} — open parameters`;
+          } else {
+            btn.title = effect.name;
+          }
+          btn.setAttribute('aria-expanded', 'false');
+          btn.onclick = (e) => selectEffect(effect, e.currentTarget);
+          container.appendChild(btn);
+        }
+
+        EFFECT_CATEGORY_ORDER.forEach((cat) => {
+          const list = byCat[cat];
+          if (!list || !list.length) return;
+          const wrap = document.createElement('div');
+          wrap.className = 'effect-category';
+          const lab = document.createElement('span');
+          lab.className = 'effect-category-label';
+          lab.textContent = EFFECT_CATEGORY_LABELS[cat] || cat;
+          const row = document.createElement('div');
+          row.className = 'effect-category-row';
+          row.setAttribute('role', 'group');
+          row.setAttribute('aria-label', EFFECT_CATEGORY_LABELS[cat] || cat);
+          list.forEach((effect) => attachEffectButton(effect, row));
+          wrap.appendChild(lab);
+          wrap.appendChild(row);
+          grid.appendChild(wrap);
+          delete byCat[cat];
+        });
+        Object.keys(byCat).forEach((cat) => {
+          const list = byCat[cat];
+          if (!list.length) return;
+          const wrap = document.createElement('div');
+          wrap.className = 'effect-category';
+          const lab = document.createElement('span');
+          lab.className = 'effect-category-label';
+          lab.textContent = EFFECT_CATEGORY_LABELS.other;
+          const row = document.createElement('div');
+          row.className = 'effect-category-row';
+          row.setAttribute('role', 'group');
+          list.forEach((effect) => attachEffectButton(effect, row));
+          wrap.appendChild(lab);
+          wrap.appendChild(row);
+          grid.appendChild(wrap);
+        });
+
         loadPresets();
       });
 
@@ -160,7 +282,8 @@ function syncKaleidoscopeMarker() {
       sourceHistory.forEach(entry => {
         const thumb = document.createElement('div');
         thumb.className = 'history-thumb' + (entry.id === activeSourceId ? ' active' : '');
-        thumb.innerHTML = `<img src="${entry.src}">`;
+        thumb.innerHTML = `<img src="${entry.src}" alt="">`;
+        thumb.title = 'Switch to this source';
         thumb.onclick = () => switchSource(entry);
         strip.appendChild(thumb);
       });
@@ -192,8 +315,8 @@ function syncKaleidoscopeMarker() {
       resultHistory.forEach(entry => {
         const thumb = document.createElement('div');
         thumb.className = 'history-thumb' + (entry.imagePath === currentResultPath ? ' active' : '');
-        thumb.innerHTML = `<img src="${entry.imagePath}">`;
-        thumb.title = entry.title;
+        thumb.innerHTML = `<img src="${entry.imagePath}" alt="">`;
+        thumb.title = `${entry.title} — use as source`;
         thumb.onclick = () => useAsSource(entry.imagePath);
         strip.appendChild(thumb);
       });
@@ -210,19 +333,26 @@ function syncKaleidoscopeMarker() {
         if (!Number.isNaN(cy)) kaleidoscopeCenter.y = Math.min(1, Math.max(0, cy));
       }
 
-      document.querySelectorAll('.effect-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.textContent === effect.name);
+      document.querySelectorAll('.effect-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.effectId === effect.id);
       });
 
       const popover = document.getElementById('paramPopover');
       popover.innerHTML = '';
 
-      if (Object.keys(effect.params).length > 0) {
-        Object.entries(effect.params).forEach(([key, paramDef]) => {
-          if (effect.id === 'blend' && (key === 'blendMode' || key === 'opacity')) {
-            return;
-          }
+      const paramEntries = Object.entries(effect.params || {}).filter(([key]) => {
+        if (effect.id === 'blend' && (key === 'blendMode' || key === 'opacity')) return false;
+        return true;
+      });
 
+      if (paramEntries.length > 0) {
+        const titleEl = document.createElement('h2');
+        titleEl.className = 'param-popover-title';
+        titleEl.id = 'paramPopoverTitle';
+        titleEl.textContent = effect.name;
+        popover.appendChild(titleEl);
+
+        paramEntries.forEach(([key, paramDef]) => {
           const group = document.createElement('div');
           group.className = 'param-group';
 
@@ -312,7 +442,9 @@ function syncKaleidoscopeMarker() {
       const previewBar = document.getElementById('clientPreviewBar');
       const id = selectedEffect?.id;
       if (blendBar) blendBar.hidden = id !== 'blend';
-      if (previewBar) previewBar.hidden = id !== 'sharpen';
+      if (previewBar) previewBar.hidden = !id || id === 'blend';
+      syncBlendHint();
+      updatePopoverPosition();
     }
 
     function syncBlendBar(overrideParams) {
@@ -358,8 +490,9 @@ function syncKaleidoscopeMarker() {
       if (popover.children.length > 0 && btnEl) {
         positionPopover(btnEl);
         popover.classList.add('visible');
+        syncPopoverAriaExpanded();
       } else {
-        popover.classList.remove('visible');
+        hideParamPopover();
       }
 
       const hasSource = uploadedImagePath || (currentSourceType === 'generated' && currentSourcePath);
@@ -372,30 +505,20 @@ function syncKaleidoscopeMarker() {
       }
     }
 
-    function positionPopover(btnEl) {
-      const popover = document.getElementById('paramPopover');
-      const rect = btnEl.getBoundingClientRect();
-      const popWidth = 240;
-      let left = rect.left;
-      if (left + popWidth + 8 > window.innerWidth) {
-        left = window.innerWidth - popWidth - 8;
-      }
-      popover.style.top = '52px';
-      popover.style.left = left + 'px';
-    }
+    window.addEventListener('resize', () => updatePopoverPosition());
 
     // Close popover on outside click or Escape
     document.addEventListener('click', (e) => {
       const popover = document.getElementById('paramPopover');
       if (!popover.classList.contains('visible')) return;
       if (!popover.contains(e.target) && !e.target.closest('.effect-btn')) {
-        popover.classList.remove('visible');
+        hideParamPopover();
       }
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         if (cropActive) { cancelCrop(); return; }
-        document.getElementById('paramPopover').classList.remove('visible');
+        hideParamPopover();
       }
     });
 
@@ -426,6 +549,7 @@ function syncKaleidoscopeMarker() {
       const el = document.getElementById('blendImageStatus');
       if (!el || !window.resultP5) return;
       el.textContent = window.resultP5.hasBlendImage() ? 'Ready' : 'None';
+      syncBlendHint();
     }
 
     // ── PROCESS (client-side via p5.js) ──
@@ -538,7 +662,7 @@ function syncKaleidoscopeMarker() {
       renderResultHistory();
     }
 
-    function useAsSource(imagePath) {
+    function useAsSource(imagePath, statusMessage = 'Using result as source') {
       updateSourcePreview(imagePath, 'generated');
       currentSourcePath = imagePath;
       currentSourceType = 'generated';
@@ -549,7 +673,27 @@ function syncKaleidoscopeMarker() {
       renderResultHistory();
       updateSavePresetBtn();
       if (window.resultP5) window.resultP5.loadSourceImage(imagePath);
-      showStatus('Using result as source', 'success');
+      showStatus(statusMessage, 'success');
+    }
+
+    async function saveResultAndUseAsSource() {
+      if (!window.resultP5 || !window.resultP5.hasResult()) return;
+      showStatus('<span class="loading-spinner"></span>Saving...', 'loading');
+      try {
+        const dataURL = window.resultP5.getResultAsDataURL();
+        const res = await fetch('/api/save-canvas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageData: dataURL })
+        });
+        if (!res.ok) throw new Error('Save failed');
+        const data = await res.json();
+        const title = selectedEffect ? selectedEffect.name : 'Result';
+        addResult(title, data.outputPath);
+        useAsSource(data.outputPath, 'Saved and set as source');
+      } catch (err) {
+        showStatus(err.message, 'error');
+      }
     }
 
     // ── STATUS ──
@@ -578,20 +722,34 @@ function syncKaleidoscopeMarker() {
     function renderPresetChips(presets) {
       const container = document.getElementById('presetChips');
       container.innerHTML = '';
-      presets.forEach(preset => {
-        const chip = document.createElement('button');
+      presets.forEach((preset) => {
+        const chip = document.createElement('div');
         chip.className = 'preset-chip';
-        chip.innerHTML = `${preset.name} <button class="delete-btn" title="Delete preset">&times;</button>`;
-        chip.addEventListener('click', (e) => {
-          if (e.target.classList.contains('delete-btn')) {
-            e.stopPropagation();
-            if (confirm(`Delete preset "${preset.name}"?`)) {
-              deletePreset(preset.name);
-            }
-          } else {
-            applyPreset(preset);
+        chip.setAttribute('role', 'group');
+        chip.setAttribute('aria-label', `Preset: ${preset.name}`);
+
+        const applyBtn = document.createElement('button');
+        applyBtn.type = 'button';
+        applyBtn.className = 'preset-chip-apply';
+        applyBtn.textContent = preset.name;
+        applyBtn.title = `Apply preset “${preset.name}”`;
+        applyBtn.addEventListener('click', () => applyPreset(preset));
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'preset-chip-delete';
+        delBtn.setAttribute('aria-label', `Delete preset ${preset.name}`);
+        delBtn.title = 'Delete preset';
+        delBtn.innerHTML = '&times;';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (confirm(`Delete preset "${preset.name}"?`)) {
+            deletePreset(preset.name);
           }
         });
+
+        chip.appendChild(applyBtn);
+        chip.appendChild(delBtn);
         container.appendChild(chip);
       });
     }
@@ -747,7 +905,7 @@ function syncKaleidoscopeMarker() {
         return;
       }
       const blendEff = effectsById['blend'];
-      const blendBtn = [...document.querySelectorAll('#effectGrid .effect-btn')].find((b) => b.textContent === 'Blend');
+      const blendBtn = document.querySelector('#effectGrid .effect-btn[data-effect-id="blend"]');
       if (!blendEff || !blendBtn) {
         showStatus('No Blend button: stop the server and run npm start again (see “How to use Blend”).', 'error');
         return;
@@ -812,7 +970,8 @@ function syncKaleidoscopeMarker() {
       if (e.target.closest('input, textarea, select')) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        saveResult();
+        if (e.shiftKey) saveResultAndUseAsSource();
+        else saveResult();
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
         e.preventDefault();
@@ -840,7 +999,9 @@ function syncKaleidoscopeMarker() {
 
     function enterCropMode() {
       cropActive = true;
-      document.getElementById('cropBtn').classList.add('crop-active');
+      const cropBtn = document.getElementById('cropBtn');
+      cropBtn.classList.add('crop-active');
+      cropBtn.setAttribute('aria-pressed', 'true');
       cropSel = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
 
       const panel = document.getElementById('sourcePanel');
@@ -877,7 +1038,9 @@ function syncKaleidoscopeMarker() {
 
     function exitCropMode() {
       cropActive = false;
-      document.getElementById('cropBtn').classList.remove('crop-active');
+      const cropBtn = document.getElementById('cropBtn');
+      cropBtn.classList.remove('crop-active');
+      cropBtn.setAttribute('aria-pressed', 'false');
       if (cropEls) {
         cropEls.overlay.removeEventListener('mousedown', onCropDown);
         document.removeEventListener('mousemove', onCropMove);
@@ -1005,6 +1168,7 @@ function cancelCrop() { exitCropMode(); }
 
 window.toggleCropMode = toggleCropMode;
 window.saveResult = saveResult;
+window.saveResultAndUseAsSource = saveResultAndUseAsSource;
 window.downloadResult = downloadResult;
 window.applyCrop = applyCrop;
 window.cancelCrop = cancelCrop;
