@@ -536,7 +536,7 @@ function applyGlitch(p, img, params) {
 
 function applyWaveWarp(p, img, params) {
   const amp = Math.max(0, Math.min(80, parseFloat(params.amplitude) || 14));
-  const f = Math.max(0.005, Math.min(1.2, parseFloat(params.frequency) || 0.12));
+  const f = Math.max(0.005, Math.min(4, parseFloat(params.frequency) || 0.12));
   const swirl = Math.max(0, Math.min(1, parseFloat(params.swirl) || 0.35));
   const w = img.width;
   const h = img.height;
@@ -674,6 +674,10 @@ function linearContrastByte(v, factor) {
   return Math.max(0, Math.min(255, Math.round(y * 255)));
 }
 
+function mixByte(a, b, t) {
+  return Math.max(0, Math.min(255, Math.round(a + (b - a) * t)));
+}
+
 /** Hue shift + saturation in HSL, additive brightness on RGB, then per-channel contrast. */
 function applyColorAdjust(p, img, params) {
   let contrast = parseFloat(params.contrast);
@@ -710,6 +714,44 @@ function applyColorAdjust(p, img, params) {
     out.pixels[i] = linearContrastByte(r, contrast);
     out.pixels[i + 1] = linearContrastByte(g, contrast);
     out.pixels[i + 2] = linearContrastByte(b, contrast);
+    out.pixels[i + 3] = a;
+  }
+
+  out.updatePixels();
+  return out;
+}
+
+// ── Colorize (tint grayscale or blend toward a chosen hue) ───────────────────
+
+function applyColorize(p, img, params) {
+  let hue = parseFloat(String(params.hue ?? params.hueShift ?? '').replace(/°\s*$/, ''));
+  if (!Number.isFinite(hue)) hue = 220;
+  hue = ((hue % 360) + 360) % 360;
+
+  let saturation = parseFloat(params.saturation);
+  if (!Number.isFinite(saturation)) saturation = 1;
+  saturation = Math.max(0, Math.min(1, saturation));
+
+  let amount = parseFloat(params.amount);
+  if (!Number.isFinite(amount)) amount = 1;
+  amount = Math.max(0, Math.min(1, amount));
+
+  const w = img.width;
+  const h = img.height;
+  const out = p.createImage(w, h);
+  img.loadPixels();
+  out.loadPixels();
+
+  for (let i = 0; i < img.pixels.length; i += 4) {
+    const r0 = img.pixels[i];
+    const g0 = img.pixels[i + 1];
+    const b0 = img.pixels[i + 2];
+    const a = img.pixels[i + 3];
+    const [, , lightness] = rgbToHsl(r0, g0, b0);
+    const [rt, gt, bt] = hslToRgb(hue, saturation, lightness);
+    out.pixels[i] = mixByte(r0, rt, amount);
+    out.pixels[i + 1] = mixByte(g0, gt, amount);
+    out.pixels[i + 2] = mixByte(b0, bt, amount);
     out.pixels[i + 3] = a;
   }
 
@@ -765,6 +807,7 @@ export const EFFECTS = {
   noise_burst: applyNoiseBurst,
   chromatic: applyChromatic,
   color_adjust: applyColorAdjust,
+  colorize: applyColorize,
 };
 
 window.setPixelSamplingMode = setPixelSamplingMode;

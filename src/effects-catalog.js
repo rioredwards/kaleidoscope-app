@@ -91,7 +91,7 @@ const effectCatalog = [
     category: 'warp',
     params: {
       amplitude: { default: 14, min: 0, max: 80, step: 1 },
-      frequency: { default: 0.12, min: 0.005, max: 1.2, step: 0.005 },
+      frequency: { default: 0.12, min: 0.005, max: 4, step: 0.005 },
       swirl: { default: 0.35, min: 0, max: 1, step: 0.05 },
     },
   },
@@ -129,6 +129,16 @@ const effectCatalog = [
       contrast: { default: 1, min: 0.05, max: 3, step: 0.05 },
       saturation: { default: 1, min: 0, max: 3, step: 0.05 },
       hueShift: { default: 0, min: -180, max: 180, step: 1, suffix: '°' },
+    },
+  },
+  {
+    id: 'colorize',
+    name: 'Colorize',
+    category: 'color',
+    params: {
+      hue: { default: 220, min: 0, max: 360, step: 1, suffix: '°' },
+      saturation: { default: 1, min: 0, max: 1, step: 0.05 },
+      amount: { default: 1, min: 0, max: 1, step: 0.05 },
     },
   },
 ];
