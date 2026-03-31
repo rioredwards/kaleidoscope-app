@@ -62,7 +62,7 @@ Chaining is the secret sauce for cover art: e.g. **Kaleidoscope → Color adjust
 
 | Kind             | Effects (examples)                                                                  |
 | ---------------- | ----------------------------------------------------------------------------------- |
-| Symmetry         | **Kaleidoscope** (folds + crop), **Mandala**                                        |
+| Symmetry         | **Kaleidoscope** (folds + crop)                                                     |
 | Color            | **Invert**, **Color adjust** (contrast, saturation, hue), **High contrast**         |
 | Warp             | **Barrel**, **Wave warp**                                                           |
 | Glitch / texture | **Glitch**, **Chromatic aberration**, **Noise burst**, **Edge detect**, **Sharpen** |

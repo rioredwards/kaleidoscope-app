@@ -39,7 +39,6 @@ const effectCatalog = [
       opacity: { default: 0.85, min: 0, max: 1, step: 0.05 },
     },
   },
-  { id: 'mandala', name: 'Mandala (8-way rotation)', category: 'symmetry', params: {} },
   { id: 'edge_detect', name: 'Edge Detection', category: 'texture', params: {} },
   {
     id: 'high_contrast',
