@@ -1,10 +1,10 @@
-/* p5-canvas.js — p5.js instance-mode sketch managing the result canvas */
+/* p5-canvas.js: p5.js instance-mode sketch managing the result canvas */
 
 import p5 from 'p5';
-import { EFFECTS } from './effects.js';
+import { EFFECTS, MAX_OUTPUT_DIM } from './effects.js';
 
 const resultSketch = (p) => {
-  const ABS_MAX_DIM = 8192;
+  const ABS_MAX_DIM = MAX_OUTPUT_DIM;
   let options = {
     sharpPixels: false,
     /** 0 = use ABS_MAX_DIM as cap (full-res path) */

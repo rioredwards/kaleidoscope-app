@@ -4,6 +4,7 @@ const { CallToolRequestSchema, ListToolsRequestSchema } = require('@modelcontext
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
+const effectCatalog = require('./src/effects-catalog.js').default;
 
 const BASE_URL = 'http://localhost:3000';
 
@@ -32,7 +33,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        effect: { type: 'string', description: 'Effect ID, e.g. 8fold_kaleidoscope' },
+        effect: { type: 'string', description: 'Effect ID, e.g. kaleidoscope' },
         localFilePath: { type: 'string', description: 'Absolute path to an image file on disk' },
         existingImagePath: { type: 'string', description: 'Server path like /outputs/output_XYZ.jpg' },
         params: { type: 'object', description: 'Effect parameters, e.g. { cropSize: "12%" }', additionalProperties: true }
@@ -97,8 +98,7 @@ const TOOLS = [
 ];
 
 async function callListEffects() {
-  const res = await fetch(`${BASE_URL}/api/effects`);
-  return res.json();
+  return { effects: effectCatalog };
 }
 
 async function callListOutputs() {
@@ -222,7 +222,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 async function main() {
   try {
-    await fetch(`${BASE_URL}/api/effects`).catch(() => {
+    await fetch(`${BASE_URL}/api/process`, { method: 'OPTIONS' }).catch(() => {
       console.error('Warning: Could not connect to kaleidoscope server at http://localhost:3000');
       console.error('Make sure the server is running with: npm start');
     });

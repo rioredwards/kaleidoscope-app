@@ -1,5 +1,6 @@
 import './style.css';
 import './p5-canvas.js';
+import effectCatalog from './effects-catalog.js';
 
 // ── STATE ──
 let selectedEffect = null;
@@ -13,6 +14,8 @@ let sourceHistory = [];
 let resultHistory = [];
 /** Normalized 0–1 point on source image: kaleidoscope sampling center (client P5 only) */
 let kaleidoscopeCenter = { x: 0.5, y: 0.5 };
+
+const LS_PRESETS = 'kaleidoscope.presets.v1';
 
 const EFFECT_CATEGORY_ORDER = ['symmetry', 'color', 'warp', 'texture', 'layout'];
 const EFFECT_CATEGORY_LABELS = {
@@ -103,80 +106,76 @@ function syncKaleidoscopeMarker() {
   panel.title = 'Click to set kaleidoscope sampling center';
 }
 
-    /** Filled after /api/effects loads — used by Try demo */
+    /** Bundled effect catalog. Used by the main UI and Try demo. */
     const effectsById = {};
 
     // ── INIT ──
-    fetch('/api/effects')
-      .then(r => r.json())
-      .then(data => {
-        const grid = document.getElementById('effectGrid');
-        grid.innerHTML = '';
-        const byCat = {};
-        data.effects.forEach((effect) => {
-          effectsById[effect.id] = effect;
-          const cat = effect.category || 'other';
-          if (!byCat[cat]) byCat[cat] = [];
-          byCat[cat].push(effect);
-        });
+    const grid = document.getElementById('effectGrid');
+    grid.innerHTML = '';
+    const byCat = {};
+    effectCatalog.forEach((effect) => {
+      effectsById[effect.id] = effect;
+      const cat = effect.category || 'other';
+      if (!byCat[cat]) byCat[cat] = [];
+      byCat[cat].push(effect);
+    });
 
-        function attachEffectButton(effect, container) {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'effect-btn';
-          btn.dataset.effectId = effect.id;
-          btn.textContent = effect.name;
-          const paramCount = Object.keys(effect.params || {}).filter((key) => {
-            if (effect.id === 'blend' && (key === 'blendMode' || key === 'opacity')) return false;
-            return true;
-          }).length;
-          if (paramCount > 0) {
-            btn.title = `${effect.name} — open parameters`;
-          } else {
-            btn.title = effect.name;
-          }
-          btn.setAttribute('aria-expanded', 'false');
-          btn.onclick = (e) => selectEffect(effect, e.currentTarget);
-          container.appendChild(btn);
-        }
+    function attachEffectButton(effect, container) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'effect-btn';
+      btn.dataset.effectId = effect.id;
+      btn.textContent = effect.name;
+      const paramCount = Object.keys(effect.params || {}).filter((key) => {
+        if (effect.id === 'blend' && (key === 'blendMode' || key === 'opacity')) return false;
+        return true;
+      }).length;
+      if (paramCount > 0) {
+        btn.title = `${effect.name}: open parameters`;
+      } else {
+        btn.title = effect.name;
+      }
+      btn.setAttribute('aria-expanded', 'false');
+      btn.onclick = (e) => selectEffect(effect, e.currentTarget);
+      container.appendChild(btn);
+    }
 
-        EFFECT_CATEGORY_ORDER.forEach((cat) => {
-          const list = byCat[cat];
-          if (!list || !list.length) return;
-          const wrap = document.createElement('div');
-          wrap.className = 'effect-category';
-          const lab = document.createElement('span');
-          lab.className = 'effect-category-label';
-          lab.textContent = EFFECT_CATEGORY_LABELS[cat] || cat;
-          const row = document.createElement('div');
-          row.className = 'effect-category-row';
-          row.setAttribute('role', 'group');
-          row.setAttribute('aria-label', EFFECT_CATEGORY_LABELS[cat] || cat);
-          list.forEach((effect) => attachEffectButton(effect, row));
-          wrap.appendChild(lab);
-          wrap.appendChild(row);
-          grid.appendChild(wrap);
-          delete byCat[cat];
-        });
-        Object.keys(byCat).forEach((cat) => {
-          const list = byCat[cat];
-          if (!list.length) return;
-          const wrap = document.createElement('div');
-          wrap.className = 'effect-category';
-          const lab = document.createElement('span');
-          lab.className = 'effect-category-label';
-          lab.textContent = EFFECT_CATEGORY_LABELS.other;
-          const row = document.createElement('div');
-          row.className = 'effect-category-row';
-          row.setAttribute('role', 'group');
-          list.forEach((effect) => attachEffectButton(effect, row));
-          wrap.appendChild(lab);
-          wrap.appendChild(row);
-          grid.appendChild(wrap);
-        });
+    EFFECT_CATEGORY_ORDER.forEach((cat) => {
+      const list = byCat[cat];
+      if (!list || !list.length) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'effect-category';
+      const lab = document.createElement('span');
+      lab.className = 'effect-category-label';
+      lab.textContent = EFFECT_CATEGORY_LABELS[cat] || cat;
+      const row = document.createElement('div');
+      row.className = 'effect-category-row';
+      row.setAttribute('role', 'group');
+      row.setAttribute('aria-label', EFFECT_CATEGORY_LABELS[cat] || cat);
+      list.forEach((effect) => attachEffectButton(effect, row));
+      wrap.appendChild(lab);
+      wrap.appendChild(row);
+      grid.appendChild(wrap);
+      delete byCat[cat];
+    });
+    Object.keys(byCat).forEach((cat) => {
+      const list = byCat[cat];
+      if (!list.length) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'effect-category';
+      const lab = document.createElement('span');
+      lab.className = 'effect-category-label';
+      lab.textContent = EFFECT_CATEGORY_LABELS.other;
+      const row = document.createElement('div');
+      row.className = 'effect-category-row';
+      row.setAttribute('role', 'group');
+      list.forEach((effect) => attachEffectButton(effect, row));
+      wrap.appendChild(lab);
+      wrap.appendChild(row);
+      grid.appendChild(wrap);
+    });
 
-        loadPresets();
-      });
+    loadPresets();
 
     // ── UPLOAD ──
     const imageInput = document.getElementById('imageInput');
@@ -185,7 +184,7 @@ function syncKaleidoscopeMarker() {
       if (e.target.files[0]) handleImageUpload(e.target.files[0]);
     };
 
-    // Drag-drop on the whole window (only for OS / external file drags — not native <img> drags)
+    // Drag-drop on the whole window (only for OS / external file drags, not native <img> drags)
     let dragCounter = 0;
     const dropOverlay = document.getElementById('dropOverlay');
 
@@ -316,7 +315,7 @@ function syncKaleidoscopeMarker() {
         const thumb = document.createElement('div');
         thumb.className = 'history-thumb' + (entry.imagePath === currentResultPath ? ' active' : '');
         thumb.innerHTML = `<img src="${entry.imagePath}" alt="">`;
-        thumb.title = `${entry.title} — use as source`;
+        thumb.title = `${entry.title}: use as source`;
         thumb.onclick = () => useAsSource(entry.imagePath);
         strip.appendChild(thumb);
       });
@@ -380,7 +379,6 @@ function syncKaleidoscopeMarker() {
 
             const select = document.createElement('select');
             select.dataset.param = key;
-            select.style.cssText = 'width:100%;padding:5px 8px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#fff;font-size:0.8em;';
             paramDef.options.forEach(opt => {
               const option = document.createElement('option');
               option.value = opt.value !== undefined ? opt.value : opt;
@@ -526,6 +524,26 @@ function syncKaleidoscopeMarker() {
       document.getElementById('savePresetBtn').disabled = !selectedEffect;
     }
 
+    function readLocalPresets() {
+      try {
+        const raw = localStorage.getItem(LS_PRESETS);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function writeLocalPresets(presets) {
+      try {
+        localStorage.setItem(LS_PRESETS, JSON.stringify(presets));
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
     function collectParamValues() {
       const params = {};
       document.querySelectorAll('#paramPopover [data-param]').forEach((el) => {
@@ -625,24 +643,12 @@ function syncKaleidoscopeMarker() {
     document.addEventListener('pointerup', endKaleidoscopeCenterDrag);
     document.addEventListener('pointercancel', endKaleidoscopeCenterDrag);
 
-    async function saveResult() {
+    function saveResult() {
       if (!window.resultP5 || !window.resultP5.hasResult()) return;
-      showStatus('<span class="loading-spinner"></span>Saving...', 'loading');
-      try {
-        const dataURL = window.resultP5.getResultAsDataURL();
-        const res = await fetch('/api/save-canvas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageData: dataURL })
-        });
-        if (!res.ok) throw new Error('Save failed');
-        const data = await res.json();
-        const title = selectedEffect ? selectedEffect.name : 'Result';
-        addResult(title, data.outputPath);
-        showStatus('Saved', 'success');
-      } catch (err) {
-        showStatus(err.message, 'error');
-      }
+      const dataURL = window.resultP5.getResultAsDataURL();
+      const title = selectedEffect ? selectedEffect.name : 'Result';
+      addResult(title, dataURL);
+      showStatus('Saved in browser', 'success');
     }
 
     function downloadResult() {
@@ -676,47 +682,33 @@ function syncKaleidoscopeMarker() {
       showStatus(statusMessage, 'success');
     }
 
-    async function saveResultAndUseAsSource() {
+    function saveResultAndUseAsSource() {
       if (!window.resultP5 || !window.resultP5.hasResult()) return;
-      showStatus('<span class="loading-spinner"></span>Saving...', 'loading');
-      try {
-        const dataURL = window.resultP5.getResultAsDataURL();
-        const res = await fetch('/api/save-canvas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageData: dataURL })
-        });
-        if (!res.ok) throw new Error('Save failed');
-        const data = await res.json();
-        const title = selectedEffect ? selectedEffect.name : 'Result';
-        addResult(title, data.outputPath);
-        useAsSource(data.outputPath, 'Saved and set as source');
-      } catch (err) {
-        showStatus(err.message, 'error');
-      }
+      const dataURL = window.resultP5.getResultAsDataURL();
+      const title = selectedEffect ? selectedEffect.name : 'Result';
+      addResult(title, dataURL);
+      useAsSource(dataURL, 'Saved in browser and set as source');
     }
 
     // ── STATUS ──
     function showStatus(message, type) {
       const status = document.getElementById('status');
       if (type === 'clear' || (!message && type !== 'loading' && type !== 'success' && type !== 'error')) {
-        status.innerHTML = '';
+        status.textContent = '';
         status.className = 'status';
         return;
       }
-      status.innerHTML = message;
       status.className = `status ${type}`;
+      if (type === 'loading') {
+        status.innerHTML = message;
+      } else {
+        status.textContent = message;
+      }
     }
 
     // ── PRESETS ──
-    async function loadPresets() {
-      try {
-        const response = await fetch('/api/presets');
-        const data = await response.json();
-        renderPresetChips(data.presets);
-      } catch (error) {
-        console.error('Error loading presets:', error);
-      }
+    function loadPresets() {
+      renderPresetChips(readLocalPresets());
     }
 
     function renderPresetChips(presets) {
@@ -754,10 +746,8 @@ function syncKaleidoscopeMarker() {
       });
     }
 
-    async function applyPreset(preset) {
-      const response = await fetch('/api/effects');
-      const data = await response.json();
-      const effect = data.effects.find(e => e.id === preset.effectId);
+    function applyPreset(preset) {
+      const effect = effectsById[preset.effectId];
 
       if (effect) {
         populateEffect(effect, preset.params);
@@ -771,47 +761,34 @@ function syncKaleidoscopeMarker() {
       }
     }
 
-    async function saveCurrentAsPreset() {
+    function saveCurrentAsPreset() {
       if (!selectedEffect) return;
 
-      const name = prompt('Preset name:');
+      const name = prompt('Preset name:')?.trim();
       if (!name) return;
 
       const params = collectParamValues();
-
-      try {
-        const response = await fetch('/api/presets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, effectId: selectedEffect.id, params })
-        });
-
-        if (response.ok) {
-          loadPresets();
-          showStatus(`Preset "${name}" saved`, 'success');
-        } else {
-          showStatus('Failed to save preset', 'error');
-        }
-      } catch (error) {
-        showStatus(error.message, 'error');
+      const presets = readLocalPresets();
+      const preset = { name, effectId: selectedEffect.id, params };
+      const idx = presets.findIndex((p) => p.name === name);
+      if (idx >= 0) presets[idx] = preset;
+      else presets.push(preset);
+      if (!writeLocalPresets(presets)) {
+        showStatus('Could not save preset in this browser', 'error');
+        return;
       }
+      loadPresets();
+      showStatus(`Preset "${name}" saved in browser`, 'success');
     }
 
-    async function deletePreset(name) {
-      try {
-        const response = await fetch(`/api/presets/${encodeURIComponent(name)}`, {
-          method: 'DELETE'
-        });
-
-        if (response.ok) {
-          loadPresets();
-          showStatus('Preset deleted', 'success');
-        } else {
-          showStatus('Failed to delete preset', 'error');
-        }
-      } catch (error) {
-        showStatus(error.message, 'error');
+    function deletePreset(name) {
+      const presets = readLocalPresets().filter((preset) => preset.name !== name);
+      if (!writeLocalPresets(presets)) {
+        showStatus('Could not update presets in this browser', 'error');
+        return;
       }
+      loadPresets();
+      showStatus('Preset deleted', 'success');
     }
 
     document.getElementById('savePresetBtn').onclick = saveCurrentAsPreset;
@@ -824,15 +801,18 @@ function syncKaleidoscopeMarker() {
       const sharpEl = document.getElementById('sharpPixels');
       const maxEl = document.getElementById('maxPreviewPx');
       if (!sharpEl || !maxEl) return Promise.resolve();
+      let maxPreviewPx = parseInt(maxEl.value, 10);
+      if (!Number.isFinite(maxPreviewPx) || maxPreviewPx < 0) maxPreviewPx = 1600;
       return window.resultP5.setOptions({
         sharpPixels: sharpEl.checked,
-        maxPreviewPx: parseInt(maxEl.value, 10),
+        maxPreviewPx,
       });
     }
 
     function initClientPixelControls() {
       const sharpEl = document.getElementById('sharpPixels');
       const maxEl = document.getElementById('maxPreviewPx');
+      if (!sharpEl || !maxEl) return;
       const savedSharp = localStorage.getItem(LS_SHARP);
       if (savedSharp !== null) sharpEl.checked = savedSharp === '1';
       const savedMax = localStorage.getItem(LS_MAX);
@@ -901,7 +881,7 @@ function syncKaleidoscopeMarker() {
 
     document.getElementById('blendTryDemoBtn').onclick = async () => {
       if (!window.resultP5) {
-        showStatus('Page still loading — try again in a second', 'error');
+        showStatus('Page still loading, try again in a second', 'error');
         return;
       }
       const blendEff = effectsById['blend'];
@@ -954,17 +934,20 @@ function syncKaleidoscopeMarker() {
         if (opVal) opVal.textContent = '0.9';
       }
       processImage();
-      showStatus('Demo: red base + blue blend layer, Screen mode — tweak Mode/Opacity here', 'success');
+      showStatus('Demo: red base + blue blend layer, Screen mode. Tweak Mode/Opacity here', 'success');
     };
 
-    document.getElementById('blendModeBar').addEventListener('change', reprocessBlendIfReady);
+    const blendModeBar = document.getElementById('blendModeBar');
+    if (blendModeBar) blendModeBar.addEventListener('change', reprocessBlendIfReady);
     const blendOpBar = document.getElementById('blendOpacityBar');
     const blendOpVal = document.getElementById('blendOpacityValue');
-    blendOpBar.addEventListener('input', () => {
-      blendOpVal.textContent = String(Math.round(parseFloat(blendOpBar.value) * 100) / 100);
-      clearTimeout(blendOpBar._debounce);
-      blendOpBar._debounce = setTimeout(reprocessBlendIfReady, 120);
-    });
+    if (blendOpBar && blendOpVal) {
+      blendOpBar.addEventListener('input', () => {
+        blendOpVal.textContent = String(Math.round(parseFloat(blendOpBar.value) * 100) / 100);
+        clearTimeout(blendOpBar._debounce);
+        blendOpBar._debounce = setTimeout(reprocessBlendIfReady, 120);
+      });
+    }
 
     document.addEventListener('keydown', (e) => {
       if (e.target.closest('input, textarea, select')) return;
@@ -1021,9 +1004,18 @@ function syncKaleidoscopeMarker() {
 
       const actions = document.createElement('div');
       actions.className = 'crop-actions-bar';
-      actions.innerHTML =
-        '<button class="result-action-btn save-btn" onclick="applyCrop()">Apply Crop</button>' +
-        '<button class="result-action-btn" onclick="cancelCrop()">Cancel</button>';
+      const cropApplyBtn = document.createElement('button');
+      cropApplyBtn.type = 'button';
+      cropApplyBtn.className = 'result-action-btn save-btn';
+      cropApplyBtn.textContent = 'Apply Crop';
+      cropApplyBtn.addEventListener('click', applyCrop);
+      const cropCancelBtn = document.createElement('button');
+      cropCancelBtn.type = 'button';
+      cropCancelBtn.className = 'result-action-btn';
+      cropCancelBtn.textContent = 'Cancel';
+      cropCancelBtn.addEventListener('click', cancelCrop);
+      actions.appendChild(cropApplyBtn);
+      actions.appendChild(cropCancelBtn);
 
       panel.appendChild(overlay);
       panel.appendChild(actions);

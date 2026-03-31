@@ -1,4 +1,6 @@
-/* effects.js — Pure client-side image effect functions for p5.js */
+/* effects.js: Pure client-side image effect functions for p5.js */
+
+export const MAX_OUTPUT_DIM = 8192;
 
 /** 'bilinear' (soft) or 'nearest' (crisp pixels, no interpolation blur) */
 let pixelSamplingMode = 'bilinear';
@@ -321,14 +323,14 @@ function blendChannel(Cb, Cs, mode) {
     case 'screen':
       return 1 - (1 - B) * (1 - S);
     case 'overlay':
-      return S < 0.5 ? 2 * B * S : 1 - 2 * (1 - B) * (1 - S);
+      return B < 0.5 ? 2 * B * S : 1 - 2 * (1 - B) * (1 - S);
     case 'darken':
       return Math.min(B, S);
     case 'lighten':
       return Math.max(B, S);
     case 'hard_light':
       if (S <= 0.5) return 2 * B * S;
-      return 1 - (1 - B) * (2 * S - 1);
+      return 1 - 2 * (1 - B) * (1 - S);
     case 'soft_light':
       if (S <= 0.5) return B - (1 - 2 * S) * B * (1 - B);
       return B + (2 * S - 1) * (Math.sqrt(B) - B);
@@ -342,7 +344,7 @@ function blendChannel(Cb, Cs, mode) {
       return Math.min(1, B / (1 - S));
     case 'color_burn':
       if (S <= 0) return 0;
-      if (S >= 1) return 1;
+      if (B >= 1) return 1;
       return Math.max(0, 1 - (1 - B) / S);
     default:
       return B * S;
@@ -451,10 +453,10 @@ function applyInvert(p, img, params) {
   return out;
 }
 
-// ── Tile (repeat image in a grid — output is larger) ────────────────────────
+// ── Tile (repeat image in a grid, output is larger) ─────────────────────────
 
 function applyTile(p, img, params) {
-  const maxOut = 8192;
+  const maxOut = MAX_OUTPUT_DIM;
   let cols = Math.max(1, Math.min(12, parseInt(params.columns, 10) || 4));
   let rows = Math.max(1, Math.min(12, parseInt(params.rows, 10) || 4));
   const w = img.width;

@@ -6,7 +6,8 @@ const { execSync } = require('child_process');
 const cors = require('cors');
 
 const app = express();
-const port = 3000;
+const port = Number(process.env.PORT) || 3000;
+const effectCatalog = require('./src/effects-catalog.js').default;
 
 // Create upload and output directories
 const uploadDir = path.join(__dirname, 'uploads');
@@ -103,32 +104,8 @@ app.post('/api/process', upload.single('image'), (req, res) => {
     let command = '';
 
     switch(effect) {
-      case 'tunnel':
-        const scale = parseInt(params.scale) || 7;
-        command = `-resize 800x800 -write mpr:base null mpr:base -size 1600x1600 xc:black -draw "color 0,0 reset" `;
-        // Fallback to simpler approach with bash
-        break;
-
-      case 'tunnel_nested':
-        command = `-virtual-pixel edge -distort DePolar 0 -gravity Center -crop ${params.cropSize || '20%'}x100%+0+0 +repage -flop `;
-        for(let i = 0; i < (parseInt(params.layers) || 6); i++) {
-          command += `-clone 0 `;
-        }
-        command += `+append -distort Polar 0`;
-        break;
-
-      case 'spiral_vortex':
-        command = `-virtual-pixel tile `;
-        const rotations = parseInt(params.rotations) || 15;
-        const steps = parseInt(params.steps) || 12;
-        // This will need bash script handling
-        break;
-
-      case '6fold_kaleidoscope':
-      case '8fold_kaleidoscope':
-      case '12fold_kaleidoscope':
       case 'kaleidoscope': {
-        const folds = parseInt(params.folds) || { '6fold_kaleidoscope': 6, '8fold_kaleidoscope': 8, '12fold_kaleidoscope': 12 }[effect] || 8;
+        const folds = parseInt(params.folds) || 8;
         const defaultCrop = { 6: '17%', 8: '12%', 12: '8%' }[folds] || '12%';
         const cropSize = params.cropSize || defaultCrop;
         command = `-virtual-pixel tile -distort DePolar 0 -gravity Center -crop ${cropSize}x100%+0+0 +repage -flop `;
@@ -157,7 +134,7 @@ app.post('/api/process', upload.single('image'), (req, res) => {
 
       case 'barrel': {
         const s = parseBarrelStrength(params);
-        // B and C both contribute (per IM docs, |A|>|B|>|C| impact — we avoid tiny C-only curves).
+        // B and C both contribute (per IM docs, |A|>|B|>|C| impact). We avoid tiny C-only curves.
         // D nudges scale so the mapping stays well-behaved at the rim.
         const B = (-0.42 * s).toFixed(4);
         const C = (-0.28 * s).toFixed(4);
@@ -199,72 +176,7 @@ app.post('/api/process', upload.single('image'), (req, res) => {
 
 // Get available effects
 app.get('/api/effects', (req, res) => {
-  res.json({
-    effects: [
-      { id: 'kaleidoscope', name: 'Kaleidoscope', category: 'symmetry', params: {
-        folds: { default: 8, options: [{ label: '6-fold', value: 6 }, { label: '8-fold', value: 8 }, { label: '12-fold', value: 12 }] },
-        cropSize: { default: 12, min: 1, max: 50, step: 1, suffix: '%' }
-      } },
-      { id: 'blend', name: 'Blend', category: 'layout', params: {
-        blendMode: { default: 'multiply', options: [
-          { label: 'Multiply', value: 'multiply' },
-          { label: 'Screen', value: 'screen' },
-          { label: 'Overlay', value: 'overlay' },
-          { label: 'Darken', value: 'darken' },
-          { label: 'Lighten', value: 'lighten' },
-          { label: 'Hard light', value: 'hard_light' },
-          { label: 'Soft light', value: 'soft_light' },
-          { label: 'Difference', value: 'difference' },
-          { label: 'Exclusion', value: 'exclusion' },
-          { label: 'Color dodge', value: 'color_dodge' },
-          { label: 'Color burn', value: 'color_burn' },
-        ] },
-        opacity: { default: 0.85, min: 0, max: 1, step: 0.05 },
-      } },
-      { id: 'mandala', name: 'Mandala (8-way rotation)', category: 'symmetry', params: {} },
-      { id: 'edge_detect', name: 'Edge Detection', category: 'texture', params: {} },
-      { id: 'high_contrast', name: 'High Contrast', category: 'color', params: { contrast: { default: 5, min: 1, max: 20, step: 0.5 } } },
-      { id: 'barrel', name: 'Barrel Distortion', category: 'warp', params: { strength: { default: 0.3, min: 0, max: 1, step: 0.05 } } },
-      { id: 'sharpen', name: 'Sharpen', category: 'texture', params: { amount: { default: 2, min: 0.5, max: 10, step: 0.5 } } },
-      { id: 'invert', name: 'Invert', category: 'color', params: {
-        strength: { default: 1, min: 0, max: 1, step: 0.05 },
-      } },
-      { id: 'tile', name: 'Tile (repeat grid)', category: 'layout', params: {
-        columns: { default: 4, min: 1, max: 12, step: 1 },
-        rows: { default: 4, min: 1, max: 12, step: 1 },
-      } },
-      { id: 'glitch', name: 'Glitch', category: 'texture', params: {
-        intensity: { default: 55, min: 0, max: 100, step: 1 },
-        slices: { default: 16, min: 4, max: 64, step: 1 },
-        rgbSplit: { default: 6, min: 0, max: 40, step: 1 },
-        scanlines: { default: 0, min: 0, max: 100, step: 5 },
-        seed: { default: '42' },
-      } },
-      { id: 'wave_warp', name: 'Wave warp', category: 'warp', params: {
-        amplitude: { default: 14, min: 0, max: 80, step: 1 },
-        frequency: { default: 0.12, min: 0.005, max: 1.2, step: 0.005 },
-        swirl: { default: 0.35, min: 0, max: 1, step: 0.05 },
-      } },
-      { id: 'noise_burst', name: 'Noise burst', category: 'texture', params: {
-        amount: { default: 35, min: 0, max: 100, step: 1 },
-        colorNoise: { default: 'mono', options: [
-          { label: 'Mono grain', value: 'mono' },
-          { label: 'RGB chaos', value: 'color' },
-        ] },
-        seed: { default: '7' },
-      } },
-      { id: 'chromatic', name: 'Chromatic aberration', category: 'texture', params: {
-        offset: { default: 8, min: 1, max: 35, step: 1 },
-        angle: { default: 0, min: 0, max: 360, step: 1, suffix: '°' },
-      } },
-      { id: 'color_adjust', name: 'Color adjust', category: 'color', params: {
-        brightness: { default: 0, min: -100, max: 100, step: 1 },
-        contrast: { default: 1, min: 0.05, max: 3, step: 0.05 },
-        saturation: { default: 1, min: 0, max: 3, step: 0.05 },
-        hueShift: { default: 0, min: -180, max: 180, step: 1, suffix: '°' },
-      } },
-    ]
-  });
+  res.json({ effects: effectCatalog });
 });
 
 // Preset management
